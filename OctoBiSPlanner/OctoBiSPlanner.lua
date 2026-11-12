@@ -20,29 +20,29 @@ OctoBiSPlannerDB = OctoBiSPlannerDB or {}
 -- ----------------------------------------------------------------------------
 local SLOTS = {
     -- Left Column (Armor)
-    { id = 1,  name = "HEAD",       label = "Head",       col = 1, row = 1, token = "#s1#",  enchant = "HEAD" },
-    { id = 2,  name = "NECK",       label = "Neck",       col = 1, row = 2, token = "#s2#" },
-    { id = 3,  name = "SHOULDER",   label = "Shoulder",   col = 1, row = 3, token = "#s3#",  enchant = "SHOULDER" },
-    { id = 4,  name = "BACK",       label = "Back",       col = 1, row = 4, token = "#s4#",  enchant = "BACK" },
-    { id = 5,  name = "CHEST",      label = "Chest",      col = 1, row = 5, token = "#s5#",  enchant = "CHEST" },
-    { id = 6,  name = "SHIRT",      label = "Shirt",      col = 1, row = 6, token = "#s6#" },
-    { id = 7,  name = "TABARD",     label = "Tabard",     col = 1, row = 7, token = "#s7#" },
-    { id = 8,  name = "WRIST",      label = "Wrists",     col = 1, row = 8, token = "#s8#",  enchant = "WRIST" },
+    { id = 1,  name = "HEAD",       label = "Head",       col = 1, row = 1, token = "#s1#",  enchant = "HEAD",     icon = "Interface\\Icons\\INV_Helmet_06" },
+    { id = 2,  name = "NECK",       label = "Neck",       col = 1, row = 2, token = "#s2#",                        icon = "Interface\\Icons\\INV_Jewelry_Necklace_07" },
+    { id = 3,  name = "SHOULDER",   label = "Shoulder",   col = 1, row = 3, token = "#s3#",  enchant = "SHOULDER", icon = "Interface\\Icons\\INV_Shoulder_02" },
+    { id = 4,  name = "BACK",       label = "Back",       col = 1, row = 4, token = "#s4#",  enchant = "BACK",     icon = "Interface\\Icons\\INV_Misc_Cape_19" },
+    { id = 5,  name = "CHEST",      label = "Chest",      col = 1, row = 5, token = "#s5#",  enchant = "CHEST",    icon = "Interface\\Icons\\INV_Chest_Cloth_17" },
+    { id = 6,  name = "SHIRT",      label = "Shirt",      col = 1, row = 6, token = "#s6#",                        icon = "Interface\\Icons\\INV_Shirt_07" },
+    { id = 7,  name = "TABARD",     label = "Tabard",     col = 1, row = 7, token = "#s7#",                        icon = "Interface\\Icons\\INV_Shirt_GuildTabard_01" },
+    { id = 8,  name = "WRIST",      label = "Wrists",     col = 1, row = 8, token = "#s8#",  enchant = "WRIST",    icon = "Interface\\Icons\\INV_Bracer_07" },
 
     -- Right Column (Accessories & Armor)
-    { id = 9,  name = "HANDS",      label = "Hands",      col = 2, row = 1, token = "#s9#",  enchant = "HANDS" },
-    { id = 10, name = "WAIST",      label = "Waist",      col = 2, row = 2, token = "#s10#" },
-    { id = 11, name = "LEGS",       label = "Legs",       col = 2, row = 3, token = "#s11#", enchant = "LEGS" },
-    { id = 12, name = "FEET",       label = "Feet",       col = 2, row = 4, token = "#s12#", enchant = "FEET" },
-    { id = 13, name = "FINGER1",    label = "Ring 1",     col = 2, row = 5, token = "#s13#" },
-    { id = 14, name = "FINGER2",    label = "Ring 2",     col = 2, row = 6, token = "#s13#" },
-    { id = 15, name = "TRINKET1",   label = "Trinket 1",  col = 2, row = 7, token = "#s14#" },
-    { id = 16, name = "TRINKET2",   label = "Trinket 2",  col = 2, row = 8, token = "#s14#" },
+    { id = 9,  name = "HANDS",      label = "Hands",      col = 2, row = 1, token = "#s9#",  enchant = "HANDS",    icon = "Interface\\Icons\\INV_Gauntlets_04" },
+    { id = 10, name = "WAIST",      label = "Waist",      col = 2, row = 2, token = "#s10#",                       icon = "Interface\\Icons\\INV_Belt_03" },
+    { id = 11, name = "LEGS",       label = "Legs",       col = 2, row = 3, token = "#s11#", enchant = "LEGS",     icon = "Interface\\Icons\\INV_Pants_02" },
+    { id = 12, name = "FEET",       label = "Feet",       col = 2, row = 4, token = "#s12#", enchant = "FEET",     icon = "Interface\\Icons\\INV_Boots_01" },
+    { id = 13, name = "FINGER1",    label = "Ring 1",     col = 2, row = 5, token = "#s13#",                       icon = "Interface\\Icons\\INV_Jewelry_Ring_03" },
+    { id = 14, name = "FINGER2",    label = "Ring 2",     col = 2, row = 6, token = "#s13#",                       icon = "Interface\\Icons\\INV_Jewelry_Ring_03" },
+    { id = 15, name = "TRINKET1",   label = "Trinket 1",  col = 2, row = 7, token = "#s14#",                       icon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01" },
+    { id = 16, name = "TRINKET2",   label = "Trinket 2",  col = 2, row = 8, token = "#s14#",                       icon = "Interface\\Icons\\INV_Jewelry_TrinketPVP_01" },
 
     -- Bottom Row (Weapons & Ranged)
-    { id = 17, name = "MAINHAND",   label = "Main Hand",  col = 3, row = 1, isWeapon = true, enchant = "WEAPON" },
-    { id = 18, name = "OFFHAND",    label = "Off Hand",   col = 3, row = 2, isOffhand = true, enchant = "OFFHAND" },
-    { id = 19, name = "RANGED",     label = "Ranged",     col = 3, row = 3, isRanged = true, enchant = "RANGED" },
+    { id = 17, name = "MAINHAND",   label = "Main Hand",  col = 3, row = 1, isWeapon = true, enchant = "WEAPON",   icon = "Interface\\Icons\\INV_Sword_04" },
+    { id = 18, name = "OFFHAND",    label = "Off Hand",   col = 3, row = 2, isOffhand = true, enchant = "OFFHAND", icon = "Interface\\Icons\\INV_Shield_04" },
+    { id = 19, name = "RANGED",     label = "Ranged",     col = 3, row = 3, isRanged = true, enchant = "RANGED",   icon = "Interface\\Icons\\INV_Weapon_Bow_05" },
 }
 
 local INV_SLOT_MAP = {
@@ -447,13 +447,13 @@ local function RefreshSlotDisplay(slotName)
         btn.hasItem = true
     elseif btn.defaultIcon then
         btn.icon:SetTexture(btn.defaultIcon)
-        btn.icon:SetVertexColor(0.65, 0.65, 0.65, 0.75)
+        btn.icon:SetVertexColor(0.28, 0.28, 0.32, 0.5)
         btn.icon:Show()
-        btn:SetBackdropBorderColor(0.35, 0.35, 0.35, 1)
+        btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.7)
         btn.hasItem = false
     else
         btn.icon:Hide()
-        btn:SetBackdropBorderColor(0.35, 0.35, 0.35, 1)
+        btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.7)
         btn.hasItem = false
     end
 
@@ -590,11 +590,13 @@ local function BuildUI()
     Planner:SetFrameStrata("HIGH")
     Planner:SetToplevel(true)
     Planner:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 20,
-        insets = { left = 5, right = 5, top = 5, bottom = 5 }
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
     })
+    Planner:SetBackdropColor(0.04, 0.05, 0.08, 0.82)
+    Planner:SetBackdropBorderColor(0.18, 0.55, 0.85, 0.85)
     local curScale = (OctoBiSPlannerDB and OctoBiSPlannerDB.scale) or 0.85
     Planner:SetScale(curScale)
     Planner:EnableMouse(true)
@@ -604,22 +606,28 @@ local function BuildUI()
     Planner:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
     Planner:Hide()
 
-    -- Title Bar
-    local titleBg = Planner:CreateTexture(nil, "ARTWORK")
-    titleBg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
-    titleBg:SetWidth(240)
-    titleBg:SetHeight(38)
-    titleBg:SetPoint("TOP", Planner, "TOP", 0, 10)
+    -- Title Bar (Modern Sleek Smoked Header)
+    local titleBg = Planner:CreateTexture(nil, "BACKGROUND")
+    titleBg:SetPoint("TOPLEFT", Planner, "TOPLEFT", 6, -6)
+    titleBg:SetPoint("TOPRIGHT", Planner, "TOPRIGHT", -6, -6)
+    titleBg:SetHeight(24)
+    titleBg:SetTexture(0.08, 0.12, 0.18, 0.85)
+
+    local titleLine = Planner:CreateTexture(nil, "ARTWORK")
+    titleLine:SetPoint("TOPLEFT", titleBg, "BOTTOMLEFT", 0, 0)
+    titleLine:SetPoint("TOPRIGHT", titleBg, "BOTTOMRIGHT", 0, 0)
+    titleLine:SetHeight(1)
+    titleLine:SetTexture(0.2, 0.6, 0.9, 0.8)
 
     local titleText = Planner:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    titleText:SetPoint("TOP", titleBg, "TOP", 0, -12)
-    titleText:SetText("|cFF00FFCC[OctoBiS Planner]|r")
+    titleText:SetPoint("LEFT", titleBg, "LEFT", 10, 0)
+    titleText:SetText("|cFF00E5FFOctoBiS Planner|r |cFF888888• Virtual Gear & BiS Builder|r")
 
     -- Close Button
     local closeBtn = CreateFrame("Button", "OctoBiSPlannerCloseBtn", Planner, "UIPanelCloseButton")
-    closeBtn:SetWidth(26)
-    closeBtn:SetHeight(26)
-    closeBtn:SetPoint("TOPRIGHT", Planner, "TOPRIGHT", -3, -3)
+    closeBtn:SetWidth(22)
+    closeBtn:SetHeight(22)
+    closeBtn:SetPoint("TOPRIGHT", Planner, "TOPRIGHT", -5, -6)
     closeBtn:SetScript("OnClick", function() Planner:Hide() end)
 
     -- ------------------------------------------------------------------------
@@ -627,8 +635,8 @@ local function BuildUI()
     -- ------------------------------------------------------------------------
     local dollFrame = CreateFrame("Frame", "OctoBiSDollFrame", Planner)
     dollFrame:SetWidth(116)
-    dollFrame:SetHeight(336)
-    dollFrame:SetPoint("TOPLEFT", Planner, "TOPLEFT", 10, -32)
+    dollFrame:SetHeight(332)
+    dollFrame:SetPoint("TOPLEFT", Planner, "TOPLEFT", 10, -36)
 
     for _, slot in ipairs(SLOTS) do
         local btn = CreateFrame("Button", "OctoBiSSlot_" .. slot.name, dollFrame)
@@ -636,9 +644,7 @@ local function BuildUI()
         btn:SetHeight(32)
         btn.slotData = slot
 
-        local invName = INV_SLOT_MAP[slot.name]
-        local _, slotTex = invName and GetInventorySlotInfo(invName)
-        btn.defaultIcon = slotTex
+        btn.defaultIcon = slot.icon
         btn.enchantCategory = slot.enchant
 
         if slot.col == 1 then
@@ -656,17 +662,17 @@ local function BuildUI()
             edgeSize = 8,
             insets = { left = 1, right = 1, top = 1, bottom = 1 }
         })
-        btn:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-        btn:SetBackdropBorderColor(0.35, 0.35, 0.35, 1)
+        btn:SetBackdropColor(0.06, 0.07, 0.1, 0.9)
+        btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.7)
 
         local icon = btn:CreateTexture(nil, "ARTWORK")
         icon:SetPoint("TOPLEFT", btn, "TOPLEFT", 2, -2)
         icon:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
         icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         btn.icon = icon
-        if slotTex then
-            icon:SetTexture(slotTex)
-            icon:SetVertexColor(0.65, 0.65, 0.65, 0.75)
+        if slot.icon then
+            icon:SetTexture(slot.icon)
+            icon:SetVertexColor(0.28, 0.28, 0.32, 0.5)
             icon:Show()
         else
             icon:Hide()
@@ -749,15 +755,15 @@ local function BuildUI()
     -- ------------------------------------------------------------------------
     local browser = CreateFrame("Frame", "OctoBiSBrowserFrame", Planner)
     browser:SetWidth(292)
-    browser:SetHeight(336)
+    browser:SetHeight(332)
     browser:SetPoint("TOPLEFT", dollFrame, "TOPRIGHT", 6, 0)
     browser:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 }
     })
-    browser:SetBackdropColor(0, 0, 0, 0.6)
-    browser:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+    browser:SetBackdropColor(0.04, 0.05, 0.07, 0.65)
+    browser:SetBackdropBorderColor(0.2, 0.35, 0.5, 0.6)
     Planner.browserPanel = browser
 
     local bTitle = browser:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -887,15 +893,15 @@ local function BuildUI()
     -- ------------------------------------------------------------------------
     local statPanel = CreateFrame("Frame", "OctoBiSStatPanel", Planner)
     statPanel:SetWidth(136)
-    statPanel:SetHeight(336)
+    statPanel:SetHeight(332)
     statPanel:SetPoint("TOPLEFT", browser, "TOPRIGHT", 6, 0)
     statPanel:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 }
     })
-    statPanel:SetBackdropColor(0, 0, 0, 0.6)
-    statPanel:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
+    statPanel:SetBackdropColor(0.04, 0.05, 0.07, 0.65)
+    statPanel:SetBackdropBorderColor(0.2, 0.35, 0.5, 0.6)
 
     local sTitle = statPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     sTitle:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -6)
