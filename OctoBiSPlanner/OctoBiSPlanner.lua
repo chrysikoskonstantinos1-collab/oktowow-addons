@@ -1062,8 +1062,114 @@ SlashCmdList["OCTOBIS"] = function(msg)
 end
 
 -- ----------------------------------------------------------------------------
--- Character Frame Integration Button
+-- Character Frame Integration (Tab + Button + Minimap)
 -- ----------------------------------------------------------------------------
+local function SetupCharacterIntegration()
+    if not CharacterFrame then return end
+
+    -- 1. Create PaperDoll frame button
+    if PaperDollFrame and not _G["PaperDollBiSPlannerBtn"] then
+        local btn = CreateFrame("Button", "PaperDollBiSPlannerBtn", PaperDollFrame, "UIPanelButtonTemplate")
+        btn:SetWidth(84)
+        btn:SetHeight(22)
+        btn:SetPoint("TOPRIGHT", PaperDollFrame, "TOPRIGHT", -38, -42)
+        btn:SetFrameLevel(PaperDollFrame:GetFrameLevel() + 10)
+        btn:SetText("BiS Planner")
+        btn:SetScript("OnClick", function()
+            OctoBiSPlanner_Toggle()
+        end)
+        btn:Show()
+    end
+
+    -- 2. Create bottom Tab on CharacterFrame
+    if not _G["CharacterFrameTabBiS"] then
+        local lastTab = nil
+        local maxId = 0
+        for i = 1, 10 do
+            local t = _G["CharacterFrameTab" .. i]
+            if t and t:IsShown() then
+                lastTab = t
+                maxId = i
+            end
+        end
+
+        local tab = CreateFrame("Button", "CharacterFrameTabBiS", CharacterFrame, "CharacterFrameTabButtonTemplate")
+        if not tab then
+            tab = CreateFrame("Button", "CharacterFrameTabBiS", CharacterFrame, "TabButtonTemplate")
+        end
+        if tab then
+            tab:SetID(maxId + 1)
+            tab:SetText("BiS Planner")
+            if PanelTemplates_TabResize then
+                PanelTemplates_TabResize(0, tab)
+            end
+            if lastTab then
+                tab:SetPoint("LEFT", lastTab, "RIGHT", -16, 0)
+            else
+                tab:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 15, -30)
+            end
+            tab:SetScript("OnClick", function()
+                OctoBiSPlanner_Toggle()
+            end)
+            tab:Show()
+            if PanelTemplates_SetNumTabs then
+                PanelTemplates_SetNumTabs(CharacterFrame, maxId + 1)
+            end
+        end
+    end
+end
+
+-- Hook CharacterFrame show events safely for Vanilla 1.12.1
+local orig_ToggleCharacter = ToggleCharacter
+ToggleCharacter = function(tab)
+    if orig_ToggleCharacter then orig_ToggleCharacter(tab) end
+    SetupCharacterIntegration()
+end
+
+local orig_CharacterFrame_OnShow = CharacterFrame_OnShow
+CharacterFrame_OnShow = function()
+    if orig_CharacterFrame_OnShow then orig_CharacterFrame_OnShow() end
+    SetupCharacterIntegration()
+end
+
+-- Minimap Icon
+local mmBtn = CreateFrame("Button", "OctoBiSMinimapBtn", Minimap)
+mmBtn:SetWidth(31)
+mmBtn:SetHeight(31)
+mmBtn:SetFrameStrata("LOW")
+mmBtn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+local mmIcon = mmBtn:CreateTexture(nil, "BACKGROUND")
+mmIcon:SetTexture("Interface\\Icons\\INV_Helmet_06")
+mmIcon:SetWidth(20)
+mmIcon:SetHeight(20)
+mmIcon:SetPoint("CENTER", mmBtn, "CENTER", 0, 0)
+mmIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+local mmBorder = mmBtn:CreateTexture(nil, "OVERLAY")
+mmBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+mmBorder:SetWidth(52)
+mmBorder:SetHeight(52)
+mmBorder:SetPoint("TOPLEFT", mmBtn, "TOPLEFT", 0, 0)
+
+local rad = 2.8
+local x = math.cos(rad) * 80
+local y = math.sin(rad) * 80
+mmBtn:SetPoint("CENTER", Minimap, "CENTER", x, y)
+
+mmBtn:RegisterForClicks("LeftButtonUp")
+mmBtn:SetScript("OnClick", function()
+    OctoBiSPlanner_Toggle()
+end)
+mmBtn:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+    GameTooltip:SetText("OctoBiS Planner", 1, 1, 1)
+    GameTooltip:AddLine("Click to open virtual gear planner & BiS builder.", 0.8, 0.8, 0.8)
+    GameTooltip:AddLine("|cff888888Slash command: /bis|r", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
+end)
+mmBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
 local hookFrame = CreateFrame("Frame", "OctoBiSHookFrame")
 hookFrame:RegisterEvent("ADDON_LOADED")
 hookFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -1074,17 +1180,6 @@ hookFrame:SetScript("OnEvent", function()
         if not Planner.isBuilt then
             BuildUI()
         end
-    end
-
-    if CharacterFrame and not _G["CharacterFrameBiSPlannerButton"] then
-        local bisBtn = CreateFrame("Button", "CharacterFrameBiSPlannerButton", CharacterFrame, "UIPanelButtonTemplate")
-        bisBtn:SetWidth(84)
-        bisBtn:SetHeight(22)
-        bisBtn:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", -42, -40)
-        bisBtn:SetFrameLevel(CharacterFrame:GetFrameLevel() + 5)
-        bisBtn:SetText("BiS Planner")
-        bisBtn:SetScript("OnClick", function()
-            OctoBiSPlanner_Toggle()
-        end)
+        SetupCharacterIntegration()
     end
 end)
