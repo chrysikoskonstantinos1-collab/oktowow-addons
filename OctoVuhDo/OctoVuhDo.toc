@@ -1,0 +1,7 @@
+## Interface: 11200
+## Title: OctoVuhDo
+## Notes: VuhDo-style Raid & Party Unit Frames for Vanilla 1.12.1 / OktoWoW. Includes click-casting, test preview mode, and customizable options.
+## Author: Velzevoul
+## Version: 1.0.0
+## SavedVariables: OctoVuhDoDB
+OctoVuhDo.lua

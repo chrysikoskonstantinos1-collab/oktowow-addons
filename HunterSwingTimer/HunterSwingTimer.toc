@@ -1,0 +1,8 @@
+## Interface: 11200
+## Title: |cffabd473Hunter Swing Timer|r
+## Notes: Advanced Auto Shot swing timer, 0.5s aim castbar, and weave/clipping safe window indicators.
+## Author: DeepMind & Velzy
+## Version: 1.0.0
+## SavedVariables: HunterSwingTimer_Config
+
+HunterSwingTimer.lua

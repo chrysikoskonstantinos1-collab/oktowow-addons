@@ -1,0 +1,9 @@
+## Interface: 11200
+## Title: |cffabd473Pet Food Bar|r
+## Notes: Scans bags for food your pet can eat and displays a small box with one-click icons to auto-feed your pet.
+## Author: DeepMind & Velzy
+## Version: 1.0.0
+## SavedVariables: PetFoodBar_Config
+
+Foods.lua
+PetFoodBar.lua

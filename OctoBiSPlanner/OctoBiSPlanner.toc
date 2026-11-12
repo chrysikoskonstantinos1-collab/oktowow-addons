@@ -1,0 +1,9 @@
+## Interface: 11200
+## Title: |cff33ffccOctoBiSPlanner|r (BiS & Gear Builder)
+## Notes: Virtual Character Paperdoll Planner with complete AtlasLoot item search, slot filters, enchants, and live stat calculations for OktoWoW.
+## Author: Antigravity
+## Version: 1.1
+## SavedVariables: OctoBiSPlannerDB
+## OptionalDeps: AtlasLoot
+
+OctoBiSPlanner.lua

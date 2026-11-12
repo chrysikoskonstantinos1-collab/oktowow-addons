@@ -1,0 +1,332 @@
+# Class Toolkit
+
+Small helpers for every class on Ravencraft and other 1.12.1 servers.
+
+- Each character only sees what fits its class.
+- Everything can be switched off.
+
+## What it does
+
+- **Swing timer**: bars count down to your next swing, Auto Shot or wand shot.
+- **Buff reminder**: an icon when a class buff is missing or running out. Click it to cast.
+- **Spell ready icons**: one icon per spell you watch. Shows cooldown, mana, range and **READY**.
+- **Cooldown countdown**: 5 seconds before a long cooldown ends, its icon counts 5 to 1 mid-screen.
+- **DoT timers**: a watched DoT counts down on your target, then says **APPLY**.
+- **Reagent and ammo warnings**: in chat and mid-screen when you run low.
+- **Range icon**: is your target in range of your main attack (or a spell you pick)?
+- **Interrupt alert**: a big **CASTING** icon when your target starts a cast, with your interrupt and if it is ready.
+- **Runner alert**: a big red **RUNNER!** when a mob runs away in fear, with the spell to stop it.
+- **Tick bar**: counts down to your next mana or energy tick, and shows the 5 second rule.
+- **Eat / drink reminder**: after a fight, click to use your best food or drink.
+- **Sell all**: at a vendor, Ctrl+Right-click an item to sell every stack of it.
+- **Hunters**: aggro meter, low ammo box, pet feed reminder, pet eating warning, Freezing Trap timer.
+- **Hunters and warlocks**: a flashing pet low health icon. Click it to heal the pet.
+
+These started in [PokeHuntLog](https://github.com/notforever-ship-it/PokeHuntLog) and moved here for every class.
+
+## Install
+
+- Launcher (RavenLaunch and similar): paste `https://github.com/notforever-ship-it/ClassToolkit` into its GitHub addon installer.
+- By hand: download the zip from the [latest release](https://github.com/notforever-ship-it/ClassToolkit/releases/latest).
+- Copy the `ClassToolkit` folder into `World of Warcraft\Interface\AddOns\`.
+- The path should end in `Interface\AddOns\ClassToolkit\ClassToolkit.toc`.
+- Close the game completely and start it again. `/reload` does not find new addons.
+
+## Start
+
+- Type **`/ctk`** for the options.
+- Press **Help** there, or type **`/ctk help`**, for the How to use window.
+- **Unlock icons**: drag icons and bars. **Lock icons** when done.
+- Settings are per character. Icon positions are shared.
+- Range checks need the spell on an **action bar** (any slot, any page).
+
+## Swing timer
+
+- Counts down to your next melee swing, Auto Shot or wand shot.
+- Auto Shot: at the red end, stand still or the shot is delayed.
+- With SuperWoW you get an off-hand bar too.
+
+## Buff reminder
+
+- An icon when a class buff is missing or running out.
+- Click it to cast. Right-click to stop that reminder.
+- `/ctk buffs reset` brings stopped reminders back.
+- Only shows once you know the spell.
+- Buffs from other players count.
+- Hunters: a warning when Cheetah or Pack is on in a fight.
+
+| Class | Reminds about |
+|---|---|
+| Warrior | Battle Shout (in combat only) |
+| Paladin | an aura, a blessing (Greater Blessings count) |
+| Hunter | an aspect, Trueshot Aura |
+| Priest | Fortitude, Inner Fire, Divine Spirit |
+| Mage | Arcane Intellect, an armor |
+| Warlock | Demon Skin or Demon Armor |
+| Druid | Mark of the Wild, Thorns, Omen of Clarity |
+| Shaman | Lightning Shield |
+
+## Spell ready icons
+
+- Add as many spells as you like in `/ctk`.
+- Shown in combat or with an enemy targeted.
+- Grey with a number: cooling down.
+- Blue: not enough mana, rage or energy.
+- Red: out of range.
+- Grey **not yet**: the game won't let you use it yet (needs the spell on an action bar).
+- **READY**: cast it.
+- **Ready icons: just the next one**: one icon for the next spell ready.
+- **Cooldown countdown**: a spell's icon counts 5 to 1 mid-screen before its cooldown ends (on by default; unlock icons to move it).
+- Paladins: your seal counts down the same way as it runs out, so you know when to recast it.
+- Hunters start with Arcane Shot.
+- **Big READY alert**: one big icon that says **READY** when you can hit the spell (Kill Command: after you crit), and goes away once you use it. No countdown, no sound. Unlock icons to move it.
+- Hunters start with Kill Command in it. Add or remove spells: `/ctk bigadd <spell>`, `/ctk bigremove <spell>`.
+
+## DoT timers
+
+- Purple countdown while your DoT ticks on your current target.
+- Orange for the last 3 seconds, then **APPLY**.
+- `/ctk dot` lists the lengths read from the tooltips.
+- `/ctk dot Rend 12` fixes one. Use `off` or `auto` in place of the number.
+
+## Reagents and ammo
+
+- Watched: Soul Shards, Ankhs, runes, candles, symbols, seeds, Flash Powder.
+- A reagent is only watched once you have carried enough of it.
+- `/ctk counts` lists what you have.
+- Hunters: ammo warnings at 200 and 50 shots.
+- Hunters: a red **low ammo box** when equipped ammo is down to 100 shots.
+- `/ctk ammo <shots>` changes that number.
+- The box also shows **OUT OF AMMO** when a bow, gun or crossbow has no ammo equipped.
+- Only the equipped stack counts, not your bags.
+
+## Range icon
+
+- Watches your class's main attack to start.
+- `/ctk range <spell>`, or the box in `/ctk`, picks another.
+- Shows In range (with yards), Melee, Under 10 yd, Under 28 yd or Out of range.
+- Hunters: **Dead zone** when neither shot nor Wing Clip lands.
+- Hunters get a plain bow picture.
+
+## Interrupt alert
+
+- Your target starts a cast: a big icon says **CASTING: <spell>**, with a flash.
+- It counts the cast down. A **~** in front means the time is a guess (3 seconds) until it has seen that spell.
+- Next to it: your interrupt or stun. **READY**, a number (cooldown), **too far** or **can't now**.
+- Goes away when the cast ends, is interrupted, or you change target.
+- With SuperWoW the real cast time is used.
+
+## Runner alert
+
+- A mob you fight runs away in fear: a big red **RUNNER!** for 3 seconds.
+- Shows the mob's name and your best spell to stop it (hunters: Concussive Shot, then Wing Clip).
+
+## Tick bar
+
+- A thin bar counts down to your next mana or energy tick (every 2 seconds).
+- **Purple** after you spend mana: the 5 second rule. Spirit regen starts again when it is full.
+- Hidden when you are full and out of combat. Not for rage.
+
+## Eat / drink reminder
+
+- After a fight: a **Drink** icon under 40% mana, an **Eat** icon under 40% health.
+- Click one to use your best drink or food (the one that restores the most and fits your level).
+- They go while you eat or drink, once you are back above 90%, or when a fight starts.
+- `/ctk drink <percent>` changes the level.
+
+## Sell all
+
+- At a vendor, **Ctrl+Right-click** an item in your bags: every stack of it is sold.
+- Its tooltip says so while the vendor window is open.
+- `/ctk sell` switches it on or off.
+
+## Hunters
+
+- **Freezing Trap timer**: a bar counts down a frozen mob. It learns your trap's real length.
+- **Pet low health**: a flashing icon when your pet is under 35% health. Click it for Mend Pet.
+- `/ctk pethealth <percent>` changes the level. Warlocks get it too, with Health Funnel.
+- **Aggro meter**: how close you are to pulling the mob off your pet.
+- It shows who the mob attacks, and says Shoot, Ease off, Hold or Feign Death.
+- It learns your server's Growl as you fight.
+- `/ctk aggro growl <threat>` sets Growl. `/ctk aggro reset` forgets.
+- **Feed reminder**: a face when your pet is not happy. Click it, then a food.
+- **Pet eating warning**: don't attack while it shows. Attacking ends the meal.
+
+## What starts switched on
+
+| | Melee timer | Auto Shot / wand timer | Buff reminder | Spell ready | Reagents | Range icon | Aggro meter and feed |
+|---|---|---|---|---|---|---|---|
+| Warrior, Rogue, Paladin, Shaman, Druid | yes | | yes | add your own | yes | yes | |
+| Priest, Mage, Warlock | | wand | yes | add your own | yes | yes | |
+| Hunter | yes | Auto Shot | yes | Arcane Shot | yes + ammo, low ammo box | yes | yes |
+
+- Every class: interrupt alert, runner alert, eat / drink reminder, cooldown ready flash.
+- Tick bar: every class but warriors.
+- Freezing Trap timer: hunters. Pet low health flash: hunters and warlocks.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `/ctk` | Options window |
+| `/ctk help` | How to use window |
+| `/ctk commands` | Every command in chat |
+| `/ctk move` (or `lock`, `unlock`) | Unlock or lock the icons for dragging |
+| `/ctk swing`, `/ctk ranged` | Melee timer, Auto Shot / wand timer on or off |
+| `/ctk ready`, `/ctk one` | Spell ready icons, just the next one, on or off |
+| `/ctk pulse` | Cooldown countdown on or off |
+| `/ctk buffs`, `/ctk reagents`, `/ctk range` | Buff reminder, reagent warnings, range icon on or off |
+| `/ctk aggro`, `/ctk feed`, `/ctk eating`, `/ctk ammo` | Hunters: aggro meter, feed reminder, eating warning, low ammo box on or off |
+| `/ctk interrupt`, `/ctk runner`, `/ctk tick`, `/ctk drink` | Interrupt alert, runner alert, tick bar, eat / drink reminder on or off |
+| `/ctk sell` | Ctrl+Right-click sell all at vendors on or off |
+| `/ctk trap` | Hunters: Freezing Trap timer on or off |
+| `/ctk pethealth` | Hunters and warlocks: pet low health flash on or off |
+| `/ctk pethealth <percent>` | Pet low health flash level (35 to start) |
+| `/ctk drink <percent>` | Eat / drink reminder level (40 to start) |
+| `/ctk range <spell>` | Spell the range icon watches |
+| `/ctk watch <spell>` | Add a spell ready icon |
+| `/ctk unwatch <spell>` | Remove one |
+| `/ctk ready all` / `/ctk ready one` | Every watched spell, or just the next one |
+| `/ctk dot` | List the DoT lengths |
+| `/ctk dot <spell> <seconds>` (or `off`, `auto`) | Fix one DoT length |
+| `/ctk aggro growl <threat>` (or `auto`) | Set what Growl is worth |
+| `/ctk aggro reset` | Forget what the aggro meter learned |
+| `/ctk feed content` / `/ctk feed unhappy` | When the feed reminder shows |
+| `/ctk feed sound` | Feed reminder sound on or off |
+| `/ctk ammo <shots>` | Low ammo box level (100 to start) |
+| `/ctk ammodebug` | What the game says about your ammo slot |
+| `/ctk buffs reset` | Bring back hidden buff reminders |
+| `/ctk counts` | List your reagents and ammo |
+| `/ctk version` | Show your version |
+| `/ctk debug on` | Show what the addon notices, for bug reports |
+| `/ctk reset` | This character's settings and all icon positions back to default |
+
+## How it works
+
+- **Swings**: SuperWoW reports every swing. Without it, the combat log is read.
+- **Buffs**: names are read from each buff's tooltip.
+- **Reagents**: only watched once you have carried the warning amount.
+- **Casts, runners, traps**: read from the combat log. SuperWoW adds real cast times.
+- The combat log parts only work on English game clients.
+
+## Reporting bugs
+
+- Take a screenshot of the problem.
+- Add what `/ctk debug on` prints, and any red error text.
+
+## For developers
+
+- The addon files sit at the repo root (launchers expect that).
+- `tools/` is for development only and left out of release zips.
+- `node tools/check-lua.js` checks every file as **Lua 5.0**.
+- `node tools/install.js [path to Interface\AddOns]` copies the addon into a game folder.
+
+## Credits
+
+Made by stealthzi.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
+
+## Changelog
+
+### 1.7.6
+
+- Change: the CASTING and RUNNER! alerts no longer play a sound. The icons and flash still show.
+
+### 1.7.5
+
+- New: **Big READY alert**, a big icon you can move that says **READY** when you can hit Kill Command (after you crit) and goes away once you use it. Unlock icons to move it. Other spells: `/ctk bigadd <spell>`.
+- Fix: Kill Command still didn't say **READY** at the right time. The spell ready icon now copies your own button on the action bar: grey **not yet** while the button is dark, **READY** the moment it lights up after you crit.
+
+### 1.7.4
+
+- Fix: Kill Command (and any spell that "can only be used after the Hunter lands a critical strike") showed **READY** all the time, because the game says it can be used any time. The addon now watches your crits: it turns **READY** after you crit your target, and goes back to **not yet** once you use it or change target.
+
+### 1.7.3
+
+- Fix: a spell ready icon said READY for a spell the game would not let you use yet (like Kill Command). With the spell on an action bar it now says **not yet** in grey until you can really use it.
+
+### 1.7.2
+
+- Fix: the seal countdown kept counting after a recast and then forgot the seal; it now re-checks the seal every second.
+
+### 1.7.1
+
+- Paladins: the cooldown countdown also counts your seal down (5 to 1) as it runs out, so you know when to recast it.
+
+### 1.7.0
+
+- **Sell all**: at a vendor, Ctrl+Right-click an item in your bags to sell every stack of it. The tooltip says so.
+- New file: close the game completely and start it again after updating.
+
+### 1.6.1
+
+- The cooldown countdown shows the spell name under the icon.
+
+### 1.6.0
+
+- **Interrupt alert**: a big CASTING icon when your target starts a cast, with a countdown, a flash, and your interrupt or stun.
+- **Runner alert**: a big red RUNNER! when a mob runs away in fear, with the spell to stop it.
+- **Tick bar**: counts down to your next mana or energy tick; purple for the 5 second rule.
+- **Eat / drink reminder**: after a fight, click to use your best food or drink.
+- **Freezing Trap timer** for hunters.
+- **Pet low health flash** for hunters (Mend Pet) and warlocks (Health Funnel).
+- **Cooldown countdown** (was the cooldown ready flash): the icon shows 5 seconds early and counts 5 to 1.
+- The options window now has two columns of switches.
+- New files: close the game completely and start it again after updating.
+
+### 1.5.5
+
+- **Cooldown countdown.** 5 seconds before a spell with a cooldown over 7 seconds comes back (so not Arcane Shot), its icon shows in the middle of the screen counting 5, 4, 3, 2, 1, then fades as it is ready. Switch in `/ctk` or `/ctk pulse`; unlock the icons to move it.
+
+### 1.5.4
+
+- **Pet eating warning for hunters.** After you feed your pet, an icon with the Feed Pet picture and the words "Pet is eating: don't attack" shows while the pet has the eating buff, and goes away the moment the buff is gone. Attacking while the pet eats cancels the meal. Its own switch in `/ctk` (on to start), `/ctk eating` in chat, and you can drag it like the other icons.
+
+### 1.5.3
+
+- **The low ammo box no longer cries wolf.** Some clients do not give the ammo slot an item name, which made the box say OUT OF AMMO with a full quiver. It now reads the equipped count directly, and only says OUT OF AMMO when a bow, gun or crossbow is in your hand, the ammo slot is empty, and there is no ammo in your bags either. If the count cannot be read it says nothing.
+- `/ctk ammodebug` prints what the game says about your ammo slot, to find out why the box does or does not show.
+- The Help window shows the version, like the other windows.
+
+### 1.5.2
+
+- **The low ammo box only looks at the ammo you have equipped**, not your bags: it shows when that stack is down to 100 shots (`/ctk ammo <shots>` to change; it used to count spare stacks), and shows "OUT OF AMMO" when a bow, gun or crossbow is in your hand with no ammo equipped.
+- **The range icon is a plain bow for hunters**, so it looks the same every time. Before, it borrowed the watched spell's picture, which came and went depending on where the spell sat on your action bars. Other classes still get the watched spell's picture.
+
+### 1.5.1
+
+- **The low ammo box is easier to see.** It now counts the equipped stack as well as the stacks in your bags, shows whenever you are down to 200 shots or fewer in all (the same level as the first chat warning), and shows "OUT OF AMMO" when a bow, gun or crossbow is in your hand and no ammo is equipped. Before, it only counted spare stacks in your bags and showed nothing with an empty quiver slot.
+
+### 1.5.0
+
+- **Aggro meter for hunters.** A bar showing how close you are to pulling the mob off your pet, who the mob is really attacking, and what to do: Shoot, Ease off, Hold, or Feign Death. Threat is counted from the combat log (damage, Growl, Distracting Shot, Feign Death) and corrected by what the mob attacks, so it learns your server's Growl numbers as you fight. Switch in `/ctk` or `/ctk aggro`; `/ctk aggro growl <threat>` if you know what Growl is worth on your server.
+
+### 1.4.1
+
+- The range icon showed a question mark for some spells (the hunter's Auto Shot among them) because the client gave no icon for them when the spellbook was read. The icon is now taken from the action button holding the spell instead, so the ready icons and DoT timers get it too.
+
+### 1.4.0
+
+- DoT timers on the spell ready icons.
+
+### 1.3.0
+
+- Range icon for every class: it watches your class's main attack, or any spell you pick with `/ctk range <spell>`.
+
+### 1.2.0
+
+- **Watch as many spells as you like.** The four-spell limit is gone; the icons wrap onto another line past six, and the options window grows with the list.
+- **One icon instead of a row:** *Ready icons: just the next one* in `/ctk` (or `/ctk ready one`) shows whichever watched spell you can cast now, or the one coming back soonest.
+- While the icons are unlocked for dragging, every ready icon shows, so you can see how much room the row takes.
+
+### 1.1.0
+
+- **How to use window:** a Help button in `/ctk`, or `/ctk help`. `/ctk commands` lists every command in chat.
+- **Low ammo box** for hunters: a red box on screen when you're down to your last 2 stacks of ammo, with the stacks and shots left. Its own switch in `/ctk`, draggable like the rest, and `/ctk ammo 3` changes when it shows.
+
+### 1.0.0
+
+- First release: swing timer for every class, buff reminder, spell ready icons, reagent and ammo warnings, and the hunter range icon and feed reminder from PokeHuntLog.

@@ -1,0 +1,7 @@
+## Interface: 11200
+## Title: RaidSynergy
+## Notes: Dynamic Group & Raid Class Buff & Debuff Monitor. Highlights active buffs/debuffs and dims missing ones.
+## Author: Velzevoul
+## Version: 1.0.0
+## SavedVariables: RaidSynergyDB
+RaidSynergy.lua
