@@ -461,6 +461,7 @@ local function RefreshSlotDisplay(slotName)
     end
 
     -- Save to DB
+    OctoBiSPlannerDB = OctoBiSPlannerDB or {}
     if not OctoBiSPlannerDB[CurrentProfile] then
         OctoBiSPlannerDB[CurrentProfile] = {}
     end
@@ -484,7 +485,7 @@ local function UpdateBrowserList()
 
     for _, it in ipairs(rawList) do
         local matchArmor = (FilterArmor == "ALL") or (it.armorType == FilterArmor) or (it.weaponType == FilterArmor)
-        local matchText = (searchLower == "") or (string.find(string.lower(it.name), searchLower, 1, true) ~= nil)
+        local matchText = (searchLower == "") or (string.find(string.lower(it.name or ""), searchLower, 1, true) ~= nil)
 
         if matchArmor and matchText then
             table.insert(CurrentBrowserItems, it)
@@ -493,10 +494,14 @@ local function UpdateBrowserList()
 
     -- Sort by quality (Epic first), then by name
     table.sort(CurrentBrowserItems, function(a, b)
-        if a.quality ~= b.quality then
-            return a.quality > b.quality
+        local qa = (a and a.quality) or 0
+        local qb = (b and b.quality) or 0
+        if qa ~= qb then
+            return qa > qb
         end
-        return a.name < b.name
+        local na = (a and a.name) or ""
+        local nb = (b and b.name) or ""
+        return na < nb
     end)
 
     local total = table.getn(CurrentBrowserItems)
@@ -654,7 +659,9 @@ local function BuildUI()
 
             local enchTxt = enchBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             enchTxt:SetPoint("CENTER", enchBtn, "CENTER", 0, 0)
-            enchTxt:SetFont("Fonts\\FRIZQT__.TTF", 8)
+            if STANDARD_TEXT_FONT then
+                enchTxt:SetFont(STANDARD_TEXT_FONT, 8, "")
+            end
             enchTxt:SetText("|cFF888888[Enchant]|r")
             enchBtn.text = enchTxt
 
@@ -1042,6 +1049,11 @@ end
 -- Toggle Function & Slash Commands
 -- ----------------------------------------------------------------------------
 function OctoBiSPlanner_Toggle()
+    OctoBiSPlannerDB = OctoBiSPlannerDB or {}
+    if not OctoBiSPlannerDB[CurrentProfile] then
+        OctoBiSPlannerDB[CurrentProfile] = { gear = {}, enchants = {} }
+    end
+
     if not Planner.isBuilt then
         BuildUI()
     end
@@ -1049,6 +1061,12 @@ function OctoBiSPlanner_Toggle()
         Planner:Hide()
     else
         IndexAtlasLootData()
+        Planner:ClearAllPoints()
+        if CharacterFrame and CharacterFrame:IsShown() then
+            Planner:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", 15, 0)
+        else
+            Planner:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        end
         Planner:Show()
         UpdateStatSummary()
     end
@@ -1070,7 +1088,7 @@ local function SetupCharacterIntegration()
     -- 1. Create PaperDoll frame button
     if PaperDollFrame and not _G["PaperDollBiSPlannerBtn"] then
         local btn = CreateFrame("Button", "PaperDollBiSPlannerBtn", PaperDollFrame, "UIPanelButtonTemplate")
-        btn:SetWidth(84)
+        btn:SetWidth(94)
         btn:SetHeight(22)
         btn:SetPoint("TOPRIGHT", PaperDollFrame, "TOPRIGHT", -38, -42)
         btn:SetFrameLevel(PaperDollFrame:GetFrameLevel() + 10)
@@ -1082,54 +1100,70 @@ local function SetupCharacterIntegration()
     end
 
     -- 2. Create bottom Tab on CharacterFrame
-    if not _G["CharacterFrameTabBiS"] then
-        local lastTab = nil
-        local maxId = 0
-        for i = 1, 10 do
-            local t = _G["CharacterFrameTab" .. i]
-            if t and t:IsShown() then
-                lastTab = t
-                maxId = i
-            end
-        end
-
-        local tab = CreateFrame("Button", "CharacterFrameTabBiS", CharacterFrame, "CharacterFrameTabButtonTemplate")
+    local tab = _G["CharacterFrameTabBiS"]
+    if not tab then
+        tab = CreateFrame("Button", "CharacterFrameTabBiS", CharacterFrame, "CharacterFrameTabButtonTemplate")
         if not tab then
             tab = CreateFrame("Button", "CharacterFrameTabBiS", CharacterFrame, "TabButtonTemplate")
         end
         if tab then
-            tab:SetID(maxId + 1)
+            tab:SetID(6)
             tab:SetText("BiS Planner")
+            tab:SetFrameLevel(CharacterFrame:GetFrameLevel() + 2)
             if PanelTemplates_TabResize then
                 PanelTemplates_TabResize(0, tab)
-            end
-            if lastTab then
-                tab:SetPoint("LEFT", lastTab, "RIGHT", -16, 0)
-            else
-                tab:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 15, -30)
             end
             tab:SetScript("OnClick", function()
                 OctoBiSPlanner_Toggle()
             end)
             tab:Show()
-            if PanelTemplates_SetNumTabs then
-                PanelTemplates_SetNumTabs(CharacterFrame, maxId + 1)
+        end
+    end
+
+    -- 3. Dynamically position tab after the rightmost shown tab
+    if tab then
+        local lastVisible = nil
+        for i = 1, 5 do
+            local t = _G["CharacterFrameTab" .. i]
+            if t and t:IsShown() and t ~= tab then
+                lastVisible = t
             end
         end
+
+        tab:ClearAllPoints()
+        if lastVisible then
+            tab:SetPoint("LEFT", lastVisible, "RIGHT", -16, 0)
+        else
+            local anchor = _G["CharacterFrameTab5"] or _G["CharacterFrameTab4"] or _G["CharacterFrameTab1"]
+            if anchor then
+                tab:SetPoint("LEFT", anchor, "RIGHT", -16, 0)
+            else
+                tab:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 15, -30)
+            end
+        end
+        tab:Show()
     end
 end
 
--- Hook CharacterFrame show events safely for Vanilla 1.12.1
+-- Hook CharacterFrame show & tab click events safely for Vanilla 1.12.1
 local orig_ToggleCharacter = ToggleCharacter
 ToggleCharacter = function(tab)
     if orig_ToggleCharacter then orig_ToggleCharacter(tab) end
     SetupCharacterIntegration()
 end
 
-local orig_CharacterFrame_OnShow = CharacterFrame_OnShow
-CharacterFrame_OnShow = function()
-    if orig_CharacterFrame_OnShow then orig_CharacterFrame_OnShow() end
+local orig_CharacterFrameTab_OnClick = CharacterFrameTab_OnClick
+CharacterFrameTab_OnClick = function()
+    if orig_CharacterFrameTab_OnClick then orig_CharacterFrameTab_OnClick() end
     SetupCharacterIntegration()
+end
+
+if CharacterFrame then
+    local orig_CharacterFrame_OnShow = CharacterFrame:GetScript("OnShow")
+    CharacterFrame:SetScript("OnShow", function()
+        if orig_CharacterFrame_OnShow then orig_CharacterFrame_OnShow() end
+        SetupCharacterIntegration()
+    end)
 end
 
 -- Minimap Icon
@@ -1176,10 +1210,20 @@ hookFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 hookFrame:RegisterEvent("VARIABLES_LOADED")
 
 hookFrame:SetScript("OnEvent", function()
+    OctoBiSPlannerDB = OctoBiSPlannerDB or {}
+    if not OctoBiSPlannerDB[CurrentProfile] then
+        OctoBiSPlannerDB[CurrentProfile] = { gear = {}, enchants = {} }
+    end
+
     if event == "VARIABLES_LOADED" or event == "PLAYER_ENTERING_WORLD" then
         if not Planner.isBuilt then
             BuildUI()
         end
         SetupCharacterIntegration()
+
+        if event == "PLAYER_ENTERING_WORLD" and not Planner.loadedAnnounced then
+            DEFAULT_CHAT_FRAME:AddMessage("|cff00ffcc[OctoBiS Planner]|r loaded! Open via Character tab, top button, minimap icon, or |cffffd100/bis|r.")
+            Planner.loadedAnnounced = true
+        end
     end
 end)
