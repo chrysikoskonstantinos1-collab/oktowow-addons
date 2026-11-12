@@ -32,8 +32,26 @@ function SlashCmdList.DEBUFFSIZE(msg, editbox)
     end
     DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccShaguPlates:|r Nameplate debuff size set to |cffffd100" .. floor(size) .. "|r.")
   else
-    local cur = (ShaguPlates_config and ShaguPlates_config.nameplates and ShaguPlates_config.nameplates.debuffsize) or "22"
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccShaguPlates:|r Nameplate debuff size is |cffffd100" .. cur .. "|r. Use |cff33ffcc/debuffsize <8-64>|r to change (e.g. |cffffd100/debuffsize 24|r).")
+    local cur = (ShaguPlates_config and ShaguPlates_config.nameplates and ShaguPlates_config.nameplates.debuffsize) or "14"
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccShaguPlates:|r Nameplate debuff size is |cffffd100" .. cur .. "|r. Use |cff33ffcc/debuffsize <8-64>|r to change (e.g. |cffffd100/debuffsize 14|r).")
+  end
+end
+
+SLASH_DEBUFFOFFSET1 = '/debuffoffset'
+SLASH_DEBUFFOFFSET2 = '/npoffset'
+function SlashCmdList.DEBUFFOFFSET(msg, editbox)
+  local offset = tonumber(msg)
+  if offset and offset >= 0 and offset <= 64 then
+    if ShaguPlates_config and ShaguPlates_config.nameplates then
+      ShaguPlates_config.nameplates.debuffoffset = tostring(floor(offset))
+    end
+    if ShaguPlates.nameplates and ShaguPlates.nameplates.UpdateConfig then
+      ShaguPlates.nameplates.UpdateConfig()
+    end
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccShaguPlates:|r Nameplate debuff offset set to |cffffd100" .. floor(offset) .. "|r.")
+  else
+    local cur = (ShaguPlates_config and ShaguPlates_config.nameplates and ShaguPlates_config.nameplates.debuffoffset) or "4"
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccShaguPlates:|r Nameplate debuff offset is |cffffd100" .. cur .. "|r. Use |cff33ffcc/debuffoffset <0-64>|r to change.")
   end
 end
 

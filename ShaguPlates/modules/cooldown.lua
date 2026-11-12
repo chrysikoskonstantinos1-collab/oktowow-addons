@@ -74,7 +74,9 @@ ShaguPlates:RegisterModule("cooldown", "vanilla:tbc", function ()
     -- enforce dynamic font size
     if C.appearance.cd.dynamicsize == "1" and cooldown.GetParent then
       height = cooldown:GetParent() and cooldown:GetParent():GetHeight() or cooldown:GetHeight() or 0
-      size = math.max((height > 0 and height * .64 or 16), size)
+      if not cooldown.pfCooldownSize and height > 0 then
+        size = math.max(math.floor(height * .64), 8)
+      end
     end
 
     cooldown.pfCooldownText.text:SetFont(C.appearance.cd.font, size, "OUTLINE")

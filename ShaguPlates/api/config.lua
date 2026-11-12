@@ -785,7 +785,7 @@ function ShaguPlates:LoadConfig()
   ShaguPlates:UpdateConfig("nameplates", nil,           "hptextformat",     "curmaxs")
   ShaguPlates:UpdateConfig("nameplates", nil,           "vpos",             "-10")
   ShaguPlates:UpdateConfig("nameplates", nil,           "width",            "120")
-  ShaguPlates:UpdateConfig("nameplates", nil,           "debuffsize",       "22")
+  ShaguPlates:UpdateConfig("nameplates", nil,           "debuffsize",       "14")
   ShaguPlates:UpdateConfig("nameplates", nil,           "debuffoffset",     "4")
   ShaguPlates:UpdateConfig("nameplates", nil,           "heighthealth",     "8")
   ShaguPlates:UpdateConfig("nameplates", nil,           "heightcast",       "8")
@@ -937,9 +937,9 @@ function ShaguPlates:MigrateConfig()
       ShaguPlates_config.unitframes.debuff_size = nil
     end
 
-    -- upgrade nameplate debuffsize to 22 if at legacy default 14
-    if ShaguPlates_config.nameplates and (ShaguPlates_config.nameplates.debuffsize == "14" or not ShaguPlates_config.nameplates.debuffsize) then
-      ShaguPlates_config.nameplates.debuffsize = "22"
+    -- normalize nameplate debuffsize to sleek 14 if oversized (22 or 30) or missing
+    if ShaguPlates_config.nameplates and (ShaguPlates_config.nameplates.debuffsize == "22" or ShaguPlates_config.nameplates.debuffsize == "30" or not ShaguPlates_config.nameplates.debuffsize) then
+      ShaguPlates_config.nameplates.debuffsize = "14"
     end
   end
 

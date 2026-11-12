@@ -280,7 +280,9 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
     if C.nameplates.debuffs["position"] == "BOTTOM" then
       aligna, alignb, offs, space = "TOPLEFT", "BOTTOMLEFT", -debuffoffset, -1
     else
-      aligna, alignb, offs, space = "BOTTOMLEFT", "TOPLEFT", debuffoffset, 1
+      local healthoffset = math.abs(tonumber(C.nameplates.health.offset) or 4)
+      local name_gap = font_size + healthoffset + 2
+      aligna, alignb, offs, space = "BOTTOMLEFT", "TOPLEFT", debuffoffset + name_gap, 1
     end
 
     nameplate.debuffs[i].stacks:SetFont(font, font_size, font_style)
@@ -293,8 +295,16 @@ ShaguPlates:RegisterModule("nameplates", "vanilla:tbc", function ()
       nameplate.debuffs[i]:SetPoint(aligna, nameplate.debuffs[i-limit], alignb, 0, space)
     end
 
-    nameplate.debuffs[i]:SetWidth(tonumber(C.nameplates.debuffsize))
-    nameplate.debuffs[i]:SetHeight(tonumber(C.nameplates.debuffsize))
+    nameplate.debuffs[i]:SetWidth(debuffsize)
+    nameplate.debuffs[i]:SetHeight(debuffsize)
+
+    if nameplate.debuffs[i].cd then
+      local cd_size = math.max(math.floor(debuffsize * 0.65), 8)
+      nameplate.debuffs[i].cd.pfCooldownSize = cd_size
+      if nameplate.debuffs[i].cd.pfCooldownText and nameplate.debuffs[i].cd.pfCooldownText.text then
+        nameplate.debuffs[i].cd.pfCooldownText.text:SetFont(C.appearance.cd.font, cd_size, "OUTLINE")
+      end
+    end
   end
 
   -- create nameplate core
