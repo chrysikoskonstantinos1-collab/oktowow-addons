@@ -464,7 +464,7 @@ local SlotButtons = {}
 local StatLabels = {}
 local BrowserRows = {}
 local FilterArmor = "ALL"
-local FilterLevel = "40+"
+local FilterLevel = "ALL"
 local SortMode = "LVL_ASC"
 local FilterSearchText = ""
 local CurrentBrowserItems = {}
@@ -515,8 +515,9 @@ local function MatchesLevelFilter(effLvl, item, filter)
     if filter == "ALL" then return true end
     if filter == "40+" then
         if effLvl >= 40 then return true end
-        if item.itemLevel and item.itemLevel >= 43 then return true end
+        if item.itemLevel and item.itemLevel >= 40 then return true end
         if item.sourceMinLvl and item.sourceMinLvl >= 38 then return true end
+        if effLvl == 0 then return true end -- allow uncached items from AtlasLoot
         return false
     elseif filter == "40-49" then
         if effLvl >= 40 and effLvl <= 49 then return true end
@@ -528,8 +529,8 @@ local function MatchesLevelFilter(effLvl, item, filter)
         return false
     elseif filter == "60" then
         if effLvl >= 60 then return true end
-        if item.sourceMinLvl and item.sourceMinLvl >= 60 then return true end
-        if item.itemLevel and item.itemLevel >= 65 then return true end
+        if item.sourceMinLvl and item.sourceMinLvl >= 58 then return true end
+        if item.itemLevel and item.itemLevel >= 60 then return true end
         return false
     end
     return true
@@ -614,6 +615,20 @@ local function UpdateStatSummary()
     if StatLabels.heal then StatLabels.heal:SetText(string.format("Bonus Heal: |cFF33FF66+%d|r", total.healing)) end
 end
 
+local function HighlightActiveSlot()
+    for name, b in pairs(SlotButtons) do
+        local it = EquippedGear[name]
+        if ActiveSlot and ActiveSlot.name == name then
+            b:SetBackdropBorderColor(1.0, 0.85, 0.1, 1.0)
+        elseif it then
+            local qc = QUALITY_COLORS[it.quality] or QUALITY_COLORS[1]
+            b:SetBackdropBorderColor(qc[1], qc[2], qc[3], 0.9)
+        else
+            b:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.7)
+        end
+    end
+end
+
 local function RefreshSlotDisplay(slotName)
     local btn = SlotButtons[slotName]
     if not btn then return end
@@ -623,20 +638,18 @@ local function RefreshSlotDisplay(slotName)
         btn.icon:SetTexture(item.icon)
         btn.icon:SetVertexColor(1, 1, 1, 1)
         btn.icon:Show()
-        local qc = QUALITY_COLORS[item.quality] or QUALITY_COLORS[1]
-        btn:SetBackdropBorderColor(qc[1], qc[2], qc[3], 1)
         btn.hasItem = true
     elseif btn.defaultIcon then
         btn.icon:SetTexture(btn.defaultIcon)
         btn.icon:SetVertexColor(0.28, 0.28, 0.32, 0.5)
         btn.icon:Show()
-        btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.7)
         btn.hasItem = false
     else
         btn.icon:Hide()
-        btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.7)
         btn.hasItem = false
     end
+
+    HighlightActiveSlot()
 
     -- Enchant text
     local ench = EquippedEnchants[slotName]
@@ -769,12 +782,18 @@ local function UpdateBrowserList()
 end
 
 local function OpenSlotBrowser(slot)
+    if not slot then return end
     ActiveSlot = slot
     IndexAtlasLootData()
-    Planner.browserTitle:SetText(string.format("Selecting: |cFFFFD100%s|r", slot.label))
+    if Planner and Planner.browserTitle then
+        Planner.browserTitle:SetText(string.format("Selecting: |cFFFFD100%s|r", slot.label or slot.name or "Slot"))
+    end
+    HighlightActiveSlot()
     BrowserPage = 1
     UpdateBrowserList()
-    Planner.browserPanel:Show()
+    if Planner and Planner.browserPanel then
+        Planner.browserPanel:Show()
+    end
 end
 
 -- ----------------------------------------------------------------------------
@@ -914,6 +933,7 @@ local function BuildUI()
             enchBtn:SetHeight(9)
             enchBtn:SetPoint("TOP", btn, "BOTTOM", 0, 0)
             enchBtn:EnableMouse(true)
+            enchBtn.slotData = slot
 
             local enchTxt = enchBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             enchTxt:SetPoint("CENTER", enchBtn, "CENTER", 0, 0)
@@ -924,11 +944,14 @@ local function BuildUI()
             enchBtn.text = enchTxt
 
             enchBtn:SetScript("OnClick", function()
-                OpenEnchantPicker(slot)
+                local s = this.slotData
+                if s then OpenEnchantPicker(s) end
             end)
             enchBtn:SetScript("OnEnter", function()
+                local s = this.slotData
+                if not s then return end
                 GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-                GameTooltip:SetText(slot.label .. " Enchant")
+                GameTooltip:SetText(s.label .. " Enchant")
                 GameTooltip:AddLine("|cFF00FFCCClick to pick an enchant for this slot.|r")
                 GameTooltip:Show()
             end)
@@ -937,39 +960,44 @@ local function BuildUI()
         end
 
         -- Slot Button Clicks
+        btn.slotData = slot
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:SetScript("OnClick", function()
+            local s = this.slotData
+            if not s then return end
             if arg1 == "RightButton" then
                 -- Clear slot
-                EquippedGear[slot.name] = nil
-                EquippedEnchants[slot.name] = nil
-                RefreshSlotDisplay(slot.name)
+                EquippedGear[s.name] = nil
+                EquippedEnchants[s.name] = nil
+                RefreshSlotDisplay(s.name)
             else
-                if IsShiftKeyDown() and slot.enchant then
-                    OpenEnchantPicker(slot)
+                if IsShiftKeyDown() and s.enchant then
+                    OpenEnchantPicker(s)
                 else
-                    OpenSlotBrowser(slot)
+                    OpenSlotBrowser(s)
                 end
             end
         end)
 
         btn:SetScript("OnEnter", function()
-            local it = EquippedGear[slot.name]
+            local s = this.slotData
+            if not s then return end
+            local it = EquippedGear[s.name]
             if it then
                 GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
                 GameTooltip:SetHyperlink("item:" .. it.id .. ":0:0:0")
-                local ench = EquippedEnchants[slot.name]
+                local ench = EquippedEnchants[s.name]
                 if ench then
                     GameTooltip:AddLine("Enchant: |cFF00FFCC" .. ench.name .. "|r")
                 end
                 GameTooltip:AddLine("|cFF888888<Right-Click to Clear Slot>|r")
-                if slot.enchant then
+                if s.enchant then
                     GameTooltip:AddLine("|cFF00FFCC<Shift-Click to Pick Enchant>|r")
                 end
                 GameTooltip:Show()
             else
                 GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-                GameTooltip:SetText(slot.label)
+                GameTooltip:SetText(s.label)
                 GameTooltip:AddLine("|cFF00FFCC<Left-Click to Search Items>|r")
                 GameTooltip:Show()
             end
@@ -1047,9 +1075,9 @@ local function BuildUI()
         txt:SetPoint("CENTER", fBtn, "CENTER", 0, 0)
         txt:SetText(af.name)
         fBtn.text = txt
-        local aName = af.name
+        fBtn.filterVal = af.name
         fBtn:SetScript("OnClick", function()
-            FilterArmor = aName
+            FilterArmor = this.filterVal
             BrowserPage = 1
             if not ActiveSlot then ActiveSlot = SLOTS[1] end
             UpdateBrowserList()
@@ -1060,7 +1088,7 @@ local function BuildUI()
         fBtn:SetScript("OnLeave", function()
             UpdateFilterButtons()
         end)
-        ArmorButtons[aName] = fBtn
+        ArmorButtons[af.name] = fBtn
     end
 
     -- Level Filter Tabs (Line 3: ALL, 40+, 40-49, 50-59, 60)
@@ -1093,9 +1121,9 @@ local function BuildUI()
         txt:SetPoint("CENTER", lBtn, "CENTER", 0, 0)
         txt:SetText(lf.name)
         lBtn.text = txt
-        local lvlName = lf.name
+        lBtn.filterVal = lf.name
         lBtn:SetScript("OnClick", function()
-            FilterLevel = lvlName
+            FilterLevel = this.filterVal
             BrowserPage = 1
             if not ActiveSlot then ActiveSlot = SLOTS[1] end
             UpdateBrowserList()
@@ -1106,7 +1134,7 @@ local function BuildUI()
         lBtn:SetScript("OnLeave", function()
             UpdateFilterButtons()
         end)
-        LevelButtons[lvlName] = lBtn
+        LevelButtons[lf.name] = lBtn
     end
 
     -- Sort Toggle Button (Line 3 Right)
@@ -1454,7 +1482,7 @@ function OctoBiSPlanner_Toggle()
         if not ActiveSlot then
             OpenSlotBrowser(SLOTS[1])
         else
-            UpdateBrowserList()
+            OpenSlotBrowser(ActiveSlot)
         end
     end
 end
