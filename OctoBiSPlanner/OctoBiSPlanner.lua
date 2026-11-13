@@ -1032,12 +1032,17 @@ local function BuildUI()
         fBtn:SetHeight(16)
         fBtn:SetPoint("TOPLEFT", browser, "TOPLEFT", curX, -25)
         curX = curX + af.width + 3
+        fBtn:SetFrameLevel(browser:GetFrameLevel() + 5)
         fBtn:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
             edgeSize = 8, insets = { left = 1, right = 1, top = 1, bottom = 1 }
         })
         fBtn:SetBackdropColor(0.1, 0.1, 0.14, 0.8)
+        fBtn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.6)
+        fBtn:EnableMouse(true)
+        fBtn:RegisterForClicks("LeftButtonUp")
+
         local txt = fBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         txt:SetPoint("CENTER", fBtn, "CENTER", 0, 0)
         txt:SetText(af.name)
@@ -1046,7 +1051,14 @@ local function BuildUI()
         fBtn:SetScript("OnClick", function()
             FilterArmor = aName
             BrowserPage = 1
+            if not ActiveSlot then ActiveSlot = SLOTS[1] end
             UpdateBrowserList()
+        end)
+        fBtn:SetScript("OnEnter", function()
+            this:SetBackdropBorderColor(0.4, 0.8, 1.0, 1.0)
+        end)
+        fBtn:SetScript("OnLeave", function()
+            UpdateFilterButtons()
         end)
         ArmorButtons[aName] = fBtn
     end
@@ -1066,12 +1078,17 @@ local function BuildUI()
         lBtn:SetHeight(16)
         lBtn:SetPoint("TOPLEFT", browser, "TOPLEFT", curX, -44)
         curX = curX + lf.width + 3
+        lBtn:SetFrameLevel(browser:GetFrameLevel() + 5)
         lBtn:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
             edgeSize = 8, insets = { left = 1, right = 1, top = 1, bottom = 1 }
         })
         lBtn:SetBackdropColor(0.1, 0.1, 0.14, 0.8)
+        lBtn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.6)
+        lBtn:EnableMouse(true)
+        lBtn:RegisterForClicks("LeftButtonUp")
+
         local txt = lBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         txt:SetPoint("CENTER", lBtn, "CENTER", 0, 0)
         txt:SetText(lf.name)
@@ -1080,7 +1097,14 @@ local function BuildUI()
         lBtn:SetScript("OnClick", function()
             FilterLevel = lvlName
             BrowserPage = 1
+            if not ActiveSlot then ActiveSlot = SLOTS[1] end
             UpdateBrowserList()
+        end)
+        lBtn:SetScript("OnEnter", function()
+            this:SetBackdropBorderColor(0.4, 0.8, 1.0, 1.0)
+        end)
+        lBtn:SetScript("OnLeave", function()
+            UpdateFilterButtons()
         end)
         LevelButtons[lvlName] = lBtn
     end
@@ -1090,6 +1114,7 @@ local function BuildUI()
     sortBtn:SetWidth(84)
     sortBtn:SetHeight(16)
     sortBtn:SetPoint("TOPRIGHT", browser, "TOPRIGHT", -8, -44)
+    sortBtn:SetFrameLevel(browser:GetFrameLevel() + 5)
     sortBtn:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -1097,6 +1122,9 @@ local function BuildUI()
     })
     sortBtn:SetBackdropColor(0.12, 0.16, 0.22, 0.9)
     sortBtn:SetBackdropBorderColor(0.3, 0.5, 0.7, 0.8)
+    sortBtn:EnableMouse(true)
+    sortBtn:RegisterForClicks("LeftButtonUp")
+
     local sTxt = sortBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     sTxt:SetPoint("CENTER", sortBtn, "CENTER", 0, 0)
     sTxt:SetText("|cFFFFD100Sort: Lvl ▲|r")
@@ -1110,9 +1138,11 @@ local function BuildUI()
             SortMode = "LVL_ASC"
         end
         BrowserPage = 1
+        if not ActiveSlot then ActiveSlot = SLOTS[1] end
         UpdateBrowserList()
     end)
     sortBtn:SetScript("OnEnter", function()
+        this:SetBackdropBorderColor(0.4, 0.8, 1.0, 1.0)
         GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
         GameTooltip:SetText("Sort Order")
         GameTooltip:AddLine("Click to cycle between:", 1, 1, 1)
@@ -1121,7 +1151,10 @@ local function BuildUI()
         GameTooltip:AddLine("• |cFFFFD100Sort: Qual|r (Quality - Epics first)", 0.8, 0.8, 0.8)
         GameTooltip:Show()
     end)
-    sortBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    sortBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+        UpdateFilterButtons()
+    end)
     SortButtonRef = sortBtn
 
     -- Browser Rows (7 rows)
@@ -1418,6 +1451,11 @@ function OctoBiSPlanner_Toggle()
         end
         Planner:Show()
         UpdateStatSummary()
+        if not ActiveSlot then
+            OpenSlotBrowser(SLOTS[1])
+        else
+            UpdateBrowserList()
+        end
     end
 end
 
