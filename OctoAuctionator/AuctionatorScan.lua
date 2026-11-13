@@ -1579,11 +1579,6 @@ function Atr_CreateScanMiniBar()
 	pauseBtn:SetHeight(19);
 	pauseBtn:SetPoint("LEFT", pbar, "RIGHT", 6, 0);
 	pauseBtn:SetText("Pause");
-	local pFont = pauseBtn:GetFontString();
-	if (pFont and GameFontHighlightSmall and GameFontHighlightSmall.GetFont) then
-		local fontName = GameFontHighlightSmall:GetFont();
-		if (fontName) then pFont:SetFont(fontName, 10); end
-	end
 	pauseBtn:SetScript("OnClick", function()
 		if (gAtr_FullScanState == ATR_FS_STARTED) then
 			Atr_FullScanPause();
@@ -1600,11 +1595,6 @@ function Atr_CreateScanMiniBar()
 	expandBtn:SetHeight(19);
 	expandBtn:SetPoint("LEFT", pauseBtn, "RIGHT", 4, 0);
 	expandBtn:SetText("Expand");
-	local eFont = expandBtn:GetFontString();
-	if (eFont and GameFontHighlightSmall and GameFontHighlightSmall.GetFont) then
-		local fontName = GameFontHighlightSmall:GetFont();
-		if (fontName) then eFont:SetFont(fontName, 10); end
-	end
 	expandBtn:SetScript("OnClick", function()
 		Atr_RestoreScan();
 	end);
@@ -1794,6 +1784,11 @@ function Atr_RestoreScan()
 		end
 	end
 
+	-- Re-align panels cleanly if Blizzard panel manager is active
+	if (UpdateUIPanelPositions) then
+		UpdateUIPanelPositions();
+	end
+
 	-- 3. Hide Mini-Bar HUD
 	if (gAtr_ScanMiniBar) then
 		gAtr_ScanMiniBar:Hide();
@@ -1810,6 +1805,13 @@ function Atr_ToggleMinimizeScan()
 	if (gAtr_ScanIsMinimized) then
 		Atr_RestoreScan();
 	else
+		local isAHOpen = (AuctionFrame and AuctionFrame:IsShown()) or (aux_frame and aux_frame:IsShown());
+		if (not isAHOpen and gAtr_FullScanState == ATR_FS_NULL) then
+			if (DEFAULT_CHAT_FRAME) then
+				DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00[Auctionator]|r You must talk to an Auctioneer first to start a scan.");
+			end
+			return;
+		end
 		if (gAtr_FullScanState == ATR_FS_NULL) then
 			Atr_FullScanStart(false);
 		end
