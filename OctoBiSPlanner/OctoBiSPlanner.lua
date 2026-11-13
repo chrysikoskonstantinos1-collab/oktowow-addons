@@ -413,6 +413,32 @@ local function IndexAtlasLootData()
             armorType = "Plate"
         end
 
+        -- Hand type & Weapon type tagging
+        local is1H = (string.find(rawDesc, "#h1#") ~= nil) or (string.find(rawDesc, "#h3#") ~= nil)
+        local is2H = (string.find(rawDesc, "#h2#") ~= nil) or (string.find(rawDesc, "#w7#") ~= nil) or (string.find(rawDesc, "#w9#") ~= nil)
+        local isShield = (string.find(rawDesc, "#w8#") ~= nil) or (string.find(cleanSource, "Shield") ~= nil)
+        local isOffhandFrill = (string.find(rawDesc, "#s15#") ~= nil) or ((string.find(rawDesc, "#h4#") ~= nil) and not isShield and not is1H)
+
+        if not (is1H or is2H or isShield or isOffhandFrill) and itemID then
+            local _, _, _, _, _, gSub, _, gEquip = GetItemInfo(itemID)
+            if gEquip == "INVTYPE_2HWEAPON" then
+                is2H = true
+            elseif gEquip == "INVTYPE_WEAPON" or gEquip == "INVTYPE_WEAPONMAINHAND" or gEquip == "INVTYPE_WEAPONOFFHAND" then
+                is1H = true
+            elseif gEquip == "INVTYPE_SHIELD" or (gSub and string.find(gSub, "Shield")) then
+                isShield = true
+            elseif gEquip == "INVTYPE_HOLDABLE" then
+                isOffhandFrill = true
+            end
+        end
+
+        local handType = nil
+        if is2H then
+            handType = "2H"
+        elseif is1H then
+            handType = "1H"
+        end
+
         -- Extract Weapon Type
         local weaponType = nil
         if string.find(rawDesc, "#w10#") then weaponType = "Sword"
@@ -423,7 +449,55 @@ local function IndexAtlasLootData()
         elseif string.find(rawDesc, "#w8#") then weaponType = "Shield"
         elseif string.find(rawDesc, "#w9#") then weaponType = "Staff"
         elseif string.find(rawDesc, "#w13#") then weaponType = "Fist"
+        elseif string.find(rawDesc, "#w2#") then weaponType = "Bow"
+        elseif string.find(rawDesc, "#w3#") then weaponType = "Crossbow"
+        elseif string.find(rawDesc, "#w5#") then weaponType = "Gun"
+        elseif string.find(rawDesc, "#w12#") then weaponType = "Wand"
+        elseif string.find(rawDesc, "#w11#") then weaponType = "Thrown"
+        elseif string.find(rawDesc, "#s16#") then weaponType = "Relic"
+        elseif isShield then weaponType = "Shield"
+        elseif isOffhandFrill then weaponType = "Off-Hand"
         elseif sRanged then weaponType = "Ranged"
+        end
+
+        if not weaponType and itemID then
+            local _, _, _, _, _, gSub = GetItemInfo(itemID)
+            if gSub then
+                if string.find(gSub, "Sword") then weaponType = "Sword"
+                elseif string.find(gSub, "Axe") then weaponType = "Axe"
+                elseif string.find(gSub, "Mace") then weaponType = "Mace"
+                elseif string.find(gSub, "Dagger") then weaponType = "Dagger"
+                elseif string.find(gSub, "Staff") or string.find(gSub, "Staves") then weaponType = "Staff"
+                elseif string.find(gSub, "Polearm") then weaponType = "Polearm"
+                elseif string.find(gSub, "Shield") then weaponType = "Shield"
+                elseif string.find(gSub, "Bow") then weaponType = "Bow"
+                elseif string.find(gSub, "Crossbow") then weaponType = "Crossbow"
+                elseif string.find(gSub, "Gun") then weaponType = "Gun"
+                elseif string.find(gSub, "Wand") then weaponType = "Wand"
+                elseif string.find(gSub, "Thrown") then weaponType = "Thrown"
+                elseif string.find(gSub, "Fist") then weaponType = "Fist"
+                end
+            end
+        end
+
+        -- Ensure proper Main Hand vs Off Hand separation
+        if isShield or isOffhandFrill then
+            sMain = false
+            sOff = true
+        elseif is2H then
+            sMain = true
+            sOff = false
+        elseif is1H then
+            if string.find(rawDesc, "#h3#") then
+                sMain = true
+                sOff = false
+            elseif string.find(rawDesc, "#h4#") then
+                sMain = false
+                sOff = true
+            else
+                sMain = true
+                sOff = true
+            end
         end
 
         local fullIcon = icon
@@ -451,6 +525,11 @@ local function IndexAtlasLootData()
             desc = rawDesc,
             armorType = armorType,
             weaponType = weaponType,
+            handType = handType,
+            is1H = is1H,
+            is2H = is2H,
+            isShield = isShield,
+            isOffhandFrill = isOffhandFrill,
             source = cleanSource,
             sourceMinLvl = sourceMinLvl,
             sourceMaxLvl = sourceMaxLvl,
@@ -558,7 +637,8 @@ end
 local SlotButtons = {}
 local StatLabels = {}
 local BrowserRows = {}
-local FilterArmor = "ALL"
+local FilterSubtype = "ALL"
+local FilterArmor = "ALL" -- backwards compatibility alias
 local FilterLevel = "ALL"
 local SortMode = "LVL_ASC"
 local FilterSearchText = ""
@@ -568,9 +648,179 @@ local ROWS_PER_PAGE = 7
 local enchMenuFrame = nil
 local UpdateSetUI = nil
 
-local ArmorButtons = {}
+local SubtypeButtons = {}
+local ArmorButtons = SubtypeButtons -- backwards compatibility alias
 local LevelButtons = {}
 local SortButtonRef = nil
+
+local SUBTYPE_CONFIGS = {
+    MAINHAND = {
+        { name = "ALL", width = 28 },
+        { name = "1-Hand", width = 42 },
+        { name = "2-Hand", width = 42 },
+        { name = "Sword", width = 36 },
+        { name = "Axe", width = 28 },
+        { name = "Mace", width = 32 },
+        { name = "Dagger", width = 38 },
+        { name = "Staff", width = 32 },
+    },
+    OFFHAND = {
+        { name = "ALL", width = 26 },
+        { name = "Shield", width = 38 },
+        { name = "1-Hand", width = 38 },
+        { name = "Off-Hand", width = 46 },
+        { name = "Sword", width = 32 },
+        { name = "Dagger", width = 36 },
+        { name = "Axe", width = 26 },
+        { name = "Mace", width = 28 },
+    },
+    RANGED = {
+        { name = "ALL", width = 28 },
+        { name = "Bow", width = 32 },
+        { name = "Crossbow", width = 46 },
+        { name = "Gun", width = 30 },
+        { name = "Wand", width = 36 },
+        { name = "Thrown", width = 40 },
+        { name = "Relic", width = 36 },
+    },
+    ARMOR = {
+        { name = "ALL", width = 32 },
+        { name = "Plate", width = 40 },
+        { name = "Mail", width = 36 },
+        { name = "Leather", width = 46 },
+        { name = "Cloth", width = 38 },
+    },
+    NONE = {
+        { name = "ALL", width = 32 },
+    }
+}
+
+local function MatchesSubtype(it, filter, querySlot)
+    if not filter or filter == "ALL" then return true end
+    if not it then return false end
+
+    if filter == "1-Hand" then
+        if it.isShield or it.isOffhandFrill then return false end
+        if it.is2H or it.handType == "2H" then return false end
+        if it.is1H or it.handType == "1H" then return true end
+        if it.id then
+            local _, _, _, _, _, _, _, gEquip = GetItemInfo(it.id)
+            if gEquip == "INVTYPE_WEAPON" or gEquip == "INVTYPE_WEAPONMAINHAND" or gEquip == "INVTYPE_WEAPONOFFHAND" then
+                return true
+            end
+        end
+        return false
+    elseif filter == "2-Hand" then
+        if it.is2H or it.handType == "2H" then return true end
+        if it.weaponType == "Staff" or it.weaponType == "Polearm" then return true end
+        if it.id then
+            local _, _, _, _, _, _, _, gEquip = GetItemInfo(it.id)
+            if gEquip == "INVTYPE_2HWEAPON" then return true end
+        end
+        return false
+    elseif filter == "Shield" then
+        if it.isShield or it.weaponType == "Shield" then return true end
+        if it.id then
+            local _, _, _, _, _, gSub, _, gEquip = GetItemInfo(it.id)
+            if gEquip == "INVTYPE_SHIELD" or (gSub and string.find(gSub, "Shield")) then
+                return true
+            end
+        end
+        return false
+    elseif filter == "Off-Hand" then
+        if it.isOffhandFrill or it.weaponType == "Off-Hand" then return true end
+        if it.desc and string.find(it.desc, "#s15#") then return true end
+        if it.id then
+            local _, _, _, _, _, _, _, gEquip = GetItemInfo(it.id)
+            if gEquip == "INVTYPE_HOLDABLE" then return true end
+        end
+        return false
+    else
+        -- Plate, Mail, Leather, Cloth, Sword, Axe, Mace, Dagger, Staff, Bow, Crossbow, Gun, Wand, Thrown, Fist, Relic
+        if it.armorType == filter or it.weaponType == filter then
+            return true
+        end
+        if it.id then
+            local _, _, _, _, _, gSub = GetItemInfo(it.id)
+            if gSub then
+                if gSub == filter or string.find(gSub, filter) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+end
+
+local function UpdateDressingRoom(previewItem)
+    if not OctoBiSDressModel then return end
+    if not Planner or not Planner.dressingFrame or not Planner.dressingFrame:IsShown() then return end
+
+    pcall(function()
+        OctoBiSDressModel:SetUnit("player")
+        OctoBiSDressModel:Undress()
+
+        for _, slot in ipairs(SLOTS) do
+            local it = EquippedGear[slot.name]
+            if it and it.id then
+                OctoBiSDressModel:TryOn("item:" .. it.id .. ":0:0:0")
+            end
+        end
+
+        if previewItem and previewItem.id then
+            OctoBiSDressModel:TryOn("item:" .. previewItem.id .. ":0:0:0")
+        end
+
+        if OctoBiSDressModel.rotation then
+            OctoBiSDressModel:SetRotation(OctoBiSDressModel.rotation)
+        end
+    end)
+end
+
+local function SetupSubtypeButtons(querySlot)
+    local cfg = SUBTYPE_CONFIGS.NONE
+    if querySlot == "MAINHAND" then
+        cfg = SUBTYPE_CONFIGS.MAINHAND
+    elseif querySlot == "OFFHAND" then
+        cfg = SUBTYPE_CONFIGS.OFFHAND
+    elseif querySlot == "RANGED" then
+        cfg = SUBTYPE_CONFIGS.RANGED
+    elseif querySlot == "HEAD" or querySlot == "SHOULDER" or querySlot == "CHEST" or querySlot == "WRIST" or querySlot == "HANDS" or querySlot == "WAIST" or querySlot == "LEGS" or querySlot == "FEET" then
+        cfg = SUBTYPE_CONFIGS.ARMOR
+    end
+
+    local found = false
+    for _, item in ipairs(cfg) do
+        if item.name == FilterSubtype then
+            found = true
+            break
+        end
+    end
+    if not found then
+        FilterSubtype = "ALL"
+        FilterArmor = "ALL"
+    end
+
+    local curX = 6
+    for i = 1, 8 do
+        local btn = SubtypeButtons[i]
+        local item = cfg[i]
+        if btn then
+            if item and Planner and Planner.browserPanel then
+                btn:ClearAllPoints()
+                btn:SetPoint("TOPLEFT", Planner.browserPanel, "TOPLEFT", curX, -25)
+                btn:SetWidth(item.width)
+                btn.text:SetText(item.name)
+                btn.filterVal = item.name
+                btn:Show()
+                curX = curX + item.width + 2
+            else
+                btn:Hide()
+                btn.filterVal = nil
+            end
+        end
+    end
+end
 
 local function GetEffectiveLevel(item)
     if not item then return 0 end
@@ -636,15 +886,18 @@ local function MatchesLevelFilter(effLvl, item, filter)
 end
 
 local function UpdateFilterButtons()
-    for name, btn in pairs(ArmorButtons) do
-        if name == FilterArmor then
-            btn:SetBackdropColor(0.18, 0.45, 0.75, 0.95)
-            btn:SetBackdropBorderColor(0.4, 0.8, 1.0, 1.0)
-            btn.text:SetText("|cFFFFD100" .. name .. "|r")
-        else
-            btn:SetBackdropColor(0.1, 0.1, 0.14, 0.8)
-            btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.6)
-            btn.text:SetText("|cFF888888" .. name .. "|r")
+    for i = 1, 8 do
+        local btn = SubtypeButtons[i]
+        if btn and btn:IsShown() and btn.filterVal then
+            if btn.filterVal == FilterSubtype then
+                btn:SetBackdropColor(0.18, 0.45, 0.75, 0.95)
+                btn:SetBackdropBorderColor(0.4, 0.8, 1.0, 1.0)
+                btn.text:SetText("|cFFFFD100" .. btn.filterVal .. "|r")
+            else
+                btn:SetBackdropColor(0.1, 0.1, 0.14, 0.8)
+                btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.6)
+                btn.text:SetText("|cFF888888" .. btn.filterVal .. "|r")
+            end
         end
     end
     for name, btn in pairs(LevelButtons) do
@@ -788,6 +1041,7 @@ local function RefreshSlotDisplay(slotName)
     OctoBiSPlannerDB[CurrentProfile].enchants = EquippedEnchants
 
     UpdateStatSummary()
+    UpdateDressingRoom()
 end
 
 local function UpdateBrowserList()
@@ -804,43 +1058,13 @@ local function UpdateBrowserList()
     local isNonArmorSlot = (querySlot == "BACK" or querySlot == "NECK" or querySlot == "FINGER" or querySlot == "TRINKET" or querySlot == "SHIRT" or querySlot == "TABARD")
 
     for _, it in ipairs(rawList) do
-        local matchArmor = isNonArmorSlot or (FilterArmor == "ALL") or (it.armorType == FilterArmor) or (it.weaponType == FilterArmor)
-        if not matchArmor and FilterArmor ~= "ALL" and it.id then
-            local _, _, _, _, _, gSubType = GetItemInfo(it.id)
-            if gSubType and gSubType == FilterArmor then
-                it.armorType = gSubType
-                matchArmor = true
-            end
-        end
-
+        local matchSubtype = isNonArmorSlot or MatchesSubtype(it, FilterSubtype, querySlot)
         local matchText = (searchLower == "") or (string.find(string.lower(it.name or ""), searchLower, 1, true) ~= nil)
 
         local effLvl = it.effLevel or GetEffectiveLevel(it)
         local matchLevel = MatchesLevelFilter(effLvl, it, FilterLevel)
 
-        if matchArmor and matchText and matchLevel then
-            table.insert(CurrentBrowserItems, it)
-        end
-    end
-    if not ActiveSlot then return end
-
-    local querySlot = ActiveSlot.name
-    if querySlot == "FINGER1" or querySlot == "FINGER2" then querySlot = "FINGER" end
-    if querySlot == "TRINKET1" or querySlot == "TRINKET2" then querySlot = "TRINKET" end
-
-    local rawList = ItemDatabase[querySlot] or {}
-    CurrentBrowserItems = {}
-
-    local searchLower = string.lower(FilterSearchText or "")
-
-    for _, it in ipairs(rawList) do
-        local matchArmor = (FilterArmor == "ALL") or (it.armorType == FilterArmor) or (it.weaponType == FilterArmor)
-        local matchText = (searchLower == "") or (string.find(string.lower(it.name or ""), searchLower, 1, true) ~= nil)
-
-        local effLvl = it.effLevel or GetEffectiveLevel(it)
-        local matchLevel = MatchesLevelFilter(effLvl, it, FilterLevel)
-
-        if matchArmor and matchText and matchLevel then
+        if matchSubtype and matchText and matchLevel then
             table.insert(CurrentBrowserItems, it)
         end
     end
@@ -950,6 +1174,7 @@ local function OpenSlotBrowser(slot)
         Planner.browserTitle:SetText(string.format("Selecting: |cFFFFD100%s|r", slot.label or slot.name or "Slot"))
     end
     HighlightActiveSlot()
+    SetupSubtypeButtons(slot.name)
     BrowserPage = 1
     local uok, uerr = pcall(UpdateBrowserList)
     if not uok and DEFAULT_CHAT_FRAME then
@@ -1018,6 +1243,129 @@ local function BuildUI()
     Planner:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
     Planner:Hide()
 
+    -- ------------------------------------------------------------------------
+    -- ATTACHED 3D DRESSING ROOM (Docked to the left of Planner)
+    -- ------------------------------------------------------------------------
+    local dressingFrame = CreateFrame("Frame", "OctoBiSDressingFrame", Planner)
+    dressingFrame:SetWidth(186)
+    dressingFrame:SetHeight(396)
+    dressingFrame:SetPoint("TOPRIGHT", Planner, "TOPLEFT", -4, 0)
+    dressingFrame:SetFrameStrata("HIGH")
+    dressingFrame:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 }
+    })
+    dressingFrame:SetBackdropColor(0.04, 0.05, 0.08, 0.85)
+    dressingFrame:SetBackdropBorderColor(0.18, 0.55, 0.85, 0.85)
+    dressingFrame:EnableMouse(true)
+    Planner.dressingFrame = dressingFrame
+
+    local dHeader = dressingFrame:CreateTexture(nil, "BACKGROUND")
+    dHeader:SetPoint("TOPLEFT", dressingFrame, "TOPLEFT", 6, -6)
+    dHeader:SetPoint("TOPRIGHT", dressingFrame, "TOPRIGHT", -6, -6)
+    dHeader:SetHeight(24)
+    dHeader:SetTexture(0.08, 0.12, 0.18, 0.85)
+
+    local dTitle = dressingFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    dTitle:SetPoint("LEFT", dHeader, "LEFT", 8, 0)
+    dTitle:SetText("|cFF00E5FFDressing Room|r")
+
+    local dHint = dressingFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    dHint:SetPoint("RIGHT", dHeader, "RIGHT", -6, 0)
+    dHint:SetText("|cFF888888Drag to turn|r")
+
+    local model = CreateFrame("DressUpModel", "OctoBiSDressModel", dressingFrame)
+    model:SetPoint("TOPLEFT", dressingFrame, "TOPLEFT", 6, -30)
+    model:SetPoint("BOTTOMRIGHT", dressingFrame, "BOTTOMRIGHT", -6, 32)
+    model:EnableMouse(true)
+    model.rotation = 0
+    model:SetRotation(0)
+
+    model:SetScript("OnMouseDown", function()
+        this.isDragging = true
+        local curX, _ = GetCursorPosition()
+        this.prevX = curX
+    end)
+    model:SetScript("OnMouseUp", function()
+        this.isDragging = false
+    end)
+    model:SetScript("OnUpdate", function()
+        if this.isDragging then
+            local curX, _ = GetCursorPosition()
+            local s = this:GetEffectiveScale() or 1
+            local diff = (curX - this.prevX) / s
+            this.prevX = curX
+            this.rotation = (this.rotation or 0) + (diff * 0.035)
+            this:SetRotation(this.rotation)
+        end
+    end)
+
+    local rotL = CreateFrame("Button", nil, dressingFrame, "UIPanelButtonTemplate")
+    rotL:SetWidth(24)
+    rotL:SetHeight(20)
+    rotL:SetPoint("BOTTOMLEFT", dressingFrame, "BOTTOMLEFT", 6, 7)
+    rotL:SetText("<")
+    rotL:SetScript("OnClick", function()
+        model.rotation = (model.rotation or 0) - 0.3
+        model:SetRotation(model.rotation)
+    end)
+
+    local rotR = CreateFrame("Button", nil, dressingFrame, "UIPanelButtonTemplate")
+    rotR:SetWidth(24)
+    rotR:SetHeight(20)
+    rotR:SetPoint("LEFT", rotL, "RIGHT", 3, 0)
+    rotR:SetText(">")
+    rotR:SetScript("OnClick", function()
+        model.rotation = (model.rotation or 0) + 0.3
+        model:SetRotation(model.rotation)
+    end)
+
+    local rstBtn = CreateFrame("Button", nil, dressingFrame, "UIPanelButtonTemplate")
+    rstBtn:SetWidth(56)
+    rstBtn:SetHeight(20)
+    rstBtn:SetPoint("LEFT", rotR, "RIGHT", 4, 0)
+    rstBtn:SetText("Reset")
+    rstBtn:SetScript("OnClick", function()
+        model.rotation = 0
+        model:SetRotation(0)
+        UpdateDressingRoom()
+    end)
+    rstBtn:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Reset Character")
+        GameTooltip:AddLine("Resets character orientation and re-dresses with all planned gear.", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    rstBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    local undBtn = CreateFrame("Button", nil, dressingFrame, "UIPanelButtonTemplate")
+    undBtn:SetWidth(58)
+    undBtn:SetHeight(20)
+    undBtn:SetPoint("LEFT", rstBtn, "RIGHT", 3, 0)
+    undBtn:SetText("Undress")
+    undBtn:SetScript("OnClick", function()
+        model:Undress()
+    end)
+    undBtn:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Undress Character")
+        GameTooltip:AddLine("Strips model to preview individual items or clear appearance.", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    undBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    dressingFrame:SetScript("OnShow", function()
+        UpdateDressingRoom()
+    end)
+
+    if OctoBiSPlannerDB and OctoBiSPlannerDB.show3DModel == false then
+        dressingFrame:Hide()
+    else
+        dressingFrame:Show()
+    end
+
     -- Title Bar (Modern Sleek Smoked Header)
     local titleBg = Planner:CreateTexture(nil, "BACKGROUND")
     titleBg:SetPoint("TOPLEFT", Planner, "TOPLEFT", 6, -6)
@@ -1041,6 +1389,30 @@ local function BuildUI()
     closeBtn:SetHeight(22)
     closeBtn:SetPoint("TOPRIGHT", Planner, "TOPRIGHT", -5, -6)
     closeBtn:SetScript("OnClick", function() Planner:Hide() end)
+
+    -- 3D Model Toggle Button
+    local modelToggleBtn = CreateFrame("Button", "OctoBiSModelToggleBtn", Planner, "UIPanelButtonTemplate")
+    modelToggleBtn:SetWidth(74)
+    modelToggleBtn:SetHeight(20)
+    modelToggleBtn:SetPoint("RIGHT", closeBtn, "LEFT", -4, 0)
+    modelToggleBtn:SetText("3D Model")
+    modelToggleBtn:SetScript("OnClick", function()
+        if dressingFrame:IsShown() then
+            dressingFrame:Hide()
+            if OctoBiSPlannerDB then OctoBiSPlannerDB.show3DModel = false end
+        else
+            dressingFrame:Show()
+            if OctoBiSPlannerDB then OctoBiSPlannerDB.show3DModel = true end
+            UpdateDressingRoom()
+        end
+    end)
+    modelToggleBtn:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Toggle 3D Dressing Room")
+        GameTooltip:AddLine("Click to show or hide the character 3D preview model.", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    modelToggleBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- ------------------------------------------------------------------------
     -- 1. LEFT PANEL: Paperdoll Slots (Columns 1 & 2)
@@ -1211,21 +1583,10 @@ local function BuildUI()
     searchLabel:SetPoint("RIGHT", searchBox, "LEFT", -4, 0)
     searchLabel:SetText("Search:")
 
-    -- Filter Tabs (Line 2: Armor: ALL, Plate, Mail, Leather, Cloth)
-    local armorFilters = {
-        { name = "ALL", width = 32 },
-        { name = "Plate", width = 40 },
-        { name = "Mail", width = 36 },
-        { name = "Leather", width = 46 },
-        { name = "Cloth", width = 38 },
-    }
-    local curX = 8
-    for _, af in ipairs(armorFilters) do
-        local fBtn = CreateFrame("Button", nil, browser)
-        fBtn:SetWidth(af.width)
+    -- Subtype Filter Tabs (Line 2: Dynamically adapts to weapons, offhands, armor, accessories)
+    for i = 1, 8 do
+        local fBtn = CreateFrame("Button", "OctoBiSSubtypeBtn_" .. i, browser)
         fBtn:SetHeight(16)
-        fBtn:SetPoint("TOPLEFT", browser, "TOPLEFT", curX, -25)
-        curX = curX + af.width + 3
         fBtn:SetFrameLevel(browser:GetFrameLevel() + 5)
         fBtn:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -1239,11 +1600,11 @@ local function BuildUI()
 
         local txt = fBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         txt:SetPoint("CENTER", fBtn, "CENTER", 0, 0)
-        txt:SetText(af.name)
         fBtn.text = txt
-        fBtn.filterVal = af.name
+
         fBtn:SetScript("OnClick", function()
-            FilterArmor = this.filterVal
+            FilterSubtype = this.filterVal or "ALL"
+            FilterArmor = FilterSubtype
             BrowserPage = 1
             if not ActiveSlot then ActiveSlot = SLOTS[1] end
             UpdateBrowserList()
@@ -1254,7 +1615,8 @@ local function BuildUI()
         fBtn:SetScript("OnLeave", function()
             UpdateFilterButtons()
         end)
-        ArmorButtons[af.name] = fBtn
+        fBtn:Hide()
+        SubtypeButtons[i] = fBtn
     end
 
     -- Level Filter Tabs (Line 3: ALL, 40+, 40-49, 50-59, 60)
@@ -1400,11 +1762,26 @@ local function BuildUI()
                 GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
                 GameTooltip:SetHyperlink("item:" .. this.item.id .. ":0:0:0")
                 GameTooltip:Show()
+
+                -- Live 3D Dressing Room preview on hover
+                if OctoBiSDressModel and Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
+                    OctoBiSDressModel:TryOn("item:" .. this.item.id .. ":0:0:0")
+                end
             end
         end)
         row:SetScript("OnLeave", function()
             this:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
             GameTooltip:Hide()
+
+            -- Restore equipped items on mouse leave if item was not equipped
+            if ActiveSlot and OctoBiSDressModel and Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
+                local eq = EquippedGear[ActiveSlot.name]
+                if eq and eq.id then
+                    OctoBiSDressModel:TryOn("item:" .. eq.id .. ":0:0:0")
+                else
+                    UpdateDressingRoom()
+                end
+            end
         end)
 
         row:Hide()
@@ -1875,7 +2252,15 @@ function OctoBiSPlanner_Toggle()
             Planner:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
         end
         Planner:Show()
+        if Planner.dressingFrame then
+            if OctoBiSPlannerDB and OctoBiSPlannerDB.show3DModel == false then
+                Planner.dressingFrame:Hide()
+            else
+                Planner.dressingFrame:Show()
+            end
+        end
         UpdateStatSummary()
+        UpdateDressingRoom()
         if UpdateSetUI then UpdateSetUI() end
         if not ActiveSlot then
             OpenSlotBrowser(SLOTS[1])
