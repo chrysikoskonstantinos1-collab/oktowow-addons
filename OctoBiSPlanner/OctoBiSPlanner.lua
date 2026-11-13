@@ -306,19 +306,15 @@ local function IndexAtlasLootData()
         local cleanName = string.gsub(rawName, "=q%d=", "")
         cleanName = string.gsub(cleanName, "=ds=", "")
 
-        -- Query GetItemInfo for missing details or fallback
-        local gName, gLink, gQuality, gLevel, gMinLevel, gClass, gSubClass, _, gEquipLoc, gTexture = GetItemInfo(itemID)
         if cleanName == "" or cleanName == " " then
+            local gName, _, gQual, _, _, _, _, _, _, gTex = GetItemInfo(itemID)
             if gName and gName ~= "" then
                 cleanName = gName
-                quality = gQuality or quality
+                quality = gQual or quality
+                if gTex then icon = gTex end
             else
                 cleanName = "Item #" .. itemID
             end
-        end
-
-        if (not icon or icon == "INV_Misc_QuestionMark" or icon == "") and gTexture then
-            icon = gTexture
         end
 
         -- Extract Armor Type
@@ -327,8 +323,6 @@ local function IndexAtlasLootData()
         elseif string.find(rawDesc, "#a3#") then armorType = "Mail"
         elseif string.find(rawDesc, "#a2#") then armorType = "Leather"
         elseif string.find(rawDesc, "#a1#") then armorType = "Cloth"
-        elseif gSubClass and (gSubClass == "Plate" or gSubClass == "Mail" or gSubClass == "Leather" or gSubClass == "Cloth") then
-            armorType = gSubClass
         end
 
         -- Extract Weapon Type
@@ -346,14 +340,21 @@ local function IndexAtlasLootData()
         end
 
         local fullIcon = icon
-        if not string.find(fullIcon, "\\") then
+        if type(fullIcon) == "string" and not string.find(fullIcon, "\\") then
             fullIcon = "Interface\\Icons\\" .. fullIcon
         end
 
         -- Source resolving
         local sourceKey = sourceName or "AtlasLoot"
-        local sourceInfo = AtlasLoot_TableNames and (AtlasLoot_TableNames[sourceKey] or AtlasLoot_TableNames[string.gsub(sourceKey, "C$", "")])
-        local cleanSource = sourceKey
+        local sourceInfo = nil
+        if AtlasLoot_TableNames and type(sourceKey) == "string" then
+            sourceInfo = AtlasLoot_TableNames[sourceKey]
+            if not sourceInfo and string.find(sourceKey, "C$") then
+                sourceInfo = AtlasLoot_TableNames[string.gsub(sourceKey, "C$", "")]
+            end
+        end
+
+        local cleanSource = tostring(sourceKey)
         local sourceMinLvl = nil
         local sourceMaxLvl = nil
 
@@ -385,9 +386,6 @@ local function IndexAtlasLootData()
             cleanSource = AtlasLoot_Data["AtlasLootSources"][itemID]
         end
 
-        local itemReqLevel = (gMinLevel and gMinLevel > 0 and gMinLevel) or sourceMinLvl or 0
-        local itemLvl = gLevel or (itemReqLevel > 0 and (itemReqLevel + 5)) or 0
-
         local itemObj = {
             id = itemID,
             name = cleanName,
@@ -399,8 +397,8 @@ local function IndexAtlasLootData()
             source = cleanSource,
             sourceMinLvl = sourceMinLvl,
             sourceMaxLvl = sourceMaxLvl,
-            reqLevel = itemReqLevel,
-            itemLevel = itemLvl,
+            reqLevel = sourceMinLvl or 0,
+            itemLevel = 0,
         }
 
         seenItems[itemID] = true
@@ -480,43 +478,36 @@ local SortButtonRef = nil
 
 local function GetEffectiveLevel(item)
     if not item then return 0 end
+    if item.effLevel and item.effLevel > 0 then
+        return item.effLevel
+    end
     if item.reqLevel and item.reqLevel > 0 then
+        item.effLevel = item.reqLevel
         return item.reqLevel
     end
     local gName, _, gQual, gLevel, gMinLevel = GetItemInfo(item.id)
     if gMinLevel and gMinLevel > 0 then
         item.reqLevel = gMinLevel
         item.itemLevel = gLevel or gMinLevel
+        item.effLevel = gMinLevel
         return gMinLevel
     end
-    if scanner then
-        scanner:ClearLines()
-        scanner:SetHyperlink("item:" .. item.id .. ":0:0:0")
-        for i = 1, 10 do
-            local line = _G["OctoBiSScannerTooltipTextLeft" .. i]
-            if line and line:IsShown() then
-                local txt = line:GetText()
-                if txt then
-                    local _, _, r = string.find(txt, "Requires Level (%d+)")
-                    if r then
-                        local rNum = tonumber(r)
-                        item.reqLevel = rNum
-                        return rNum
-                    end
-                end
-            end
-        end
-    end
     if item.sourceMinLvl and item.sourceMinLvl > 0 then
+        item.effLevel = item.sourceMinLvl
         return item.sourceMinLvl
     end
     if item.itemLevel and item.itemLevel > 0 then
-        return math.max(1, item.itemLevel - 5)
+        local est = math.max(1, item.itemLevel - 5)
+        item.effLevel = est
+        return est
     end
     if gLevel and gLevel > 0 then
         item.itemLevel = gLevel
-        return math.max(1, gLevel - 5)
+        local est = math.max(1, gLevel - 5)
+        item.effLevel = est
+        return est
     end
+    item.effLevel = 0
     return 0
 end
 
@@ -685,7 +676,7 @@ local function UpdateBrowserList()
         local matchArmor = (FilterArmor == "ALL") or (it.armorType == FilterArmor) or (it.weaponType == FilterArmor)
         local matchText = (searchLower == "") or (string.find(string.lower(it.name or ""), searchLower, 1, true) ~= nil)
 
-        local effLvl = GetEffectiveLevel(it)
+        local effLvl = it.effLevel or GetEffectiveLevel(it)
         local matchLevel = MatchesLevelFilter(effLvl, it, FilterLevel)
 
         if matchArmor and matchText and matchLevel then
@@ -695,8 +686,8 @@ local function UpdateBrowserList()
 
     -- Sort according to SortMode
     table.sort(CurrentBrowserItems, function(a, b)
-        local effA = GetEffectiveLevel(a)
-        local effB = GetEffectiveLevel(b)
+        local effA = (a and a.effLevel) or 0
+        local effB = (b and b.effLevel) or 0
         local qa = (a and a.quality) or 0
         local qb = (b and b.quality) or 0
         local na = (a and a.name) or ""
@@ -1406,12 +1397,19 @@ function OctoBiSPlanner_Toggle()
     end
 
     if not Planner.isBuilt then
-        BuildUI()
+        local ok, err = pcall(BuildUI)
+        if not ok and DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[OctoBiS Build Error]:|r " .. tostring(err))
+            return
+        end
     end
     if Planner:IsShown() then
         Planner:Hide()
     else
-        IndexAtlasLootData()
+        local ok, err = pcall(IndexAtlasLootData)
+        if not ok and DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[OctoBiS Index Error]:|r " .. tostring(err))
+        end
         Planner:ClearAllPoints()
         if CharacterFrame and CharacterFrame:IsShown() then
             Planner:SetPoint("TOPLEFT", CharacterFrame, "TOPRIGHT", 15, 0)
@@ -1427,7 +1425,10 @@ SLASH_OCTOBIS1 = "/bis"
 SLASH_OCTOBIS2 = "/gearplanner"
 SLASH_OCTOBIS3 = "/octobis"
 SlashCmdList["OCTOBIS"] = function(msg)
-    OctoBiSPlanner_Toggle()
+    local ok, err = pcall(OctoBiSPlanner_Toggle)
+    if not ok and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[OctoBiS Error]:|r " .. tostring(err))
+    end
 end
 
 SLASH_OCTOBISCALE1 = "/biscale"
