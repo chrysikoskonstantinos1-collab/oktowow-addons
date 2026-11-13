@@ -2695,6 +2695,39 @@ end
 
 function Atr_OnAuctionHouseShow()
 
+	-- Failsafe: Ensure AuctionFrame is restored, on screen, and visible if previously minimized or closed
+	if (Atr_RestoreScan) then
+		Atr_RestoreScan();
+	end
+	if (AuctionFrame) then
+		local x = AuctionFrame:GetLeft();
+		local a = AuctionFrame:GetAlpha() or 1;
+		if ((x and x < -500) or a < 0.5) then
+			AuctionFrame:ClearAllPoints();
+			AuctionFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104);
+			AuctionFrame:SetAlpha(1);
+			AuctionFrame:EnableMouse(true);
+			if (AuctionFrame_OnHide and not AuctionFrame:GetScript("OnHide")) then
+				AuctionFrame:SetScript("OnHide", AuctionFrame_OnHide);
+			end
+		end
+	end
+	if (UIPanelWindows and not UIPanelWindows["AuctionFrame"]) then
+		UIPanelWindows["AuctionFrame"] = { area = "doublewide", pushable = 0 };
+	end
+
+	local auxFrame = getglobal("aux_frame");
+	if (auxFrame) then
+		local ax = auxFrame:GetLeft();
+		local aa = auxFrame:GetAlpha() or 1;
+		if ((ax and ax < -500) or aa < 0.5) then
+			auxFrame:ClearAllPoints();
+			auxFrame:SetPoint("LEFT", 100, 0);
+			auxFrame:SetAlpha(1);
+			auxFrame:EnableMouse(true);
+		end
+	end
+
 	gOpenAllBags = AUCTIONATOR_OPEN_ALL_BAGS;
 
 	if (AUCTIONATOR_DEFTAB == 1) then		Atr_SelectPane (SELL_TAB);	end
@@ -2715,14 +2748,37 @@ end
 
 function Atr_OnAuctionHouseClosed()
 
-	if (Atr_RestoreScan and gAtr_ScanIsMinimized) then
+	if (Atr_RestoreScan) then
 		Atr_RestoreScan();
-		if (gAtr_FullScanState == ATR_FS_STARTED) then
-			Atr_FullScanPause();
-		end
+	end
+
+	if (gAtr_FullScanState == ATR_FS_STARTED) then
+		Atr_FullScanPause();
 		if (DEFAULT_CHAT_FRAME) then
 			DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00[Auctionator]|r Auction House closed (moved out of range). Scan paused.");
 		end
+	end
+
+	-- Extra failsafe on close: ensure AuctionFrame and UIPanelWindows are 100% normal
+	if (AuctionFrame) then
+		AuctionFrame:ClearAllPoints();
+		AuctionFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104);
+		AuctionFrame:SetAlpha(1);
+		AuctionFrame:EnableMouse(true);
+		if (AuctionFrame_OnHide and not AuctionFrame:GetScript("OnHide")) then
+			AuctionFrame:SetScript("OnHide", AuctionFrame_OnHide);
+		end
+	end
+	if (UIPanelWindows and not UIPanelWindows["AuctionFrame"]) then
+		UIPanelWindows["AuctionFrame"] = { area = "doublewide", pushable = 0 };
+	end
+
+	local auxFrame = getglobal("aux_frame");
+	if (auxFrame) then
+		auxFrame:ClearAllPoints();
+		auxFrame:SetPoint("LEFT", 100, 0);
+		auxFrame:SetAlpha(1);
+		auxFrame:EnableMouse(true);
 	end
 
 	Atr_HideAllDialogs();

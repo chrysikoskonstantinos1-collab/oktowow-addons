@@ -1732,10 +1732,30 @@ function Atr_MinimizeScan()
 end
 
 function Atr_RestoreScan()
-	if (not gAtr_ScanIsMinimized) then return; end
+	local wasMinimized = gAtr_ScanIsMinimized;
+	local isDisplaced = false;
+	if (AuctionFrame) then
+		local x = AuctionFrame:GetLeft();
+		local a = AuctionFrame:GetAlpha() or 1;
+		if ((x and x < -500) or a < 0.5) then
+			isDisplaced = true;
+		end
+	end
+	local auxFrame = getglobal("aux_frame");
+	if (auxFrame) then
+		local ax = auxFrame:GetLeft();
+		local aa = auxFrame:GetAlpha() or 1;
+		if ((ax and ax < -500) or aa < 0.5) then
+			isDisplaced = true;
+		end
+	end
+
+	if (not wasMinimized and not isDisplaced) then
+		return;
+	end
 	gAtr_ScanIsMinimized = false;
 
-	if (PlaySound) then PlaySound("igMiniMapZoomOut"); end
+	if (PlaySound and wasMinimized) then PlaySound("igMiniMapZoomOut"); end
 
 	-- 1. Restore UIPanelWindows registration
 	if (UIPanelWindows) then
@@ -1747,8 +1767,8 @@ function Atr_RestoreScan()
 		end
 	end
 
-	-- 2. Restore AuctionFrame position & visibility
-	if (AuctionFrame and AuctionFrame:IsShown()) then
+	-- 2. Restore AuctionFrame position & visibility (unconditional, even if not shown)
+	if (AuctionFrame) then
 		AuctionFrame:ClearAllPoints();
 		if (gAtr_OrigAuctionFramePoints and table.getn(gAtr_OrigAuctionFramePoints) > 0) then
 			for _, pt in ipairs(gAtr_OrigAuctionFramePoints) do
@@ -1762,12 +1782,14 @@ function Atr_RestoreScan()
 		if (gAtr_OrigAuctionFrameOnHide) then
 			AuctionFrame:SetScript("OnHide", gAtr_OrigAuctionFrameOnHide);
 			gAtr_OrigAuctionFrameOnHide = nil;
+		elseif (AuctionFrame_OnHide) then
+			AuctionFrame:SetScript("OnHide", AuctionFrame_OnHide);
 		end
 	end
+	gAtr_OrigAuctionFramePoints = nil;
 
-	-- Restore aux_frame if needed
-	local auxFrame = getglobal("aux_frame");
-	if (auxFrame and auxFrame:IsShown()) then
+	-- Restore aux_frame if needed (unconditional)
+	if (auxFrame) then
 		auxFrame:ClearAllPoints();
 		if (gAtr_OrigAuxFramePoints and table.getn(gAtr_OrigAuxFramePoints) > 0) then
 			for _, pt in ipairs(gAtr_OrigAuxFramePoints) do
@@ -1783,6 +1805,7 @@ function Atr_RestoreScan()
 			gAtr_OrigAuxFrameOnHide = nil;
 		end
 	end
+	gAtr_OrigAuxFramePoints = nil;
 
 	-- Re-align panels cleanly if Blizzard panel manager is active
 	if (UpdateUIPanelPositions) then
@@ -1794,8 +1817,9 @@ function Atr_RestoreScan()
 		gAtr_ScanMiniBar:Hide();
 	end
 
-	-- 4. Re-show FullScan dialog & mask
-	if (Atr_FullScanFrame) then
+	-- 4. Re-show FullScan dialog & mask if scan is active and AH is open
+	local isAHOpen = (AuctionFrame and AuctionFrame:IsShown()) or (auxFrame and auxFrame:IsShown());
+	if (Atr_FullScanFrame and isAHOpen and (gAtr_FullScanState == ATR_FS_STARTED or gAtr_FullScanState == ATR_FS_PAUSED or gAtr_FullScanState == ATR_FS_ANALYZING)) then
 		Atr_FullScanFrame:Show();
 		Atr_UpdateFullScanFrame();
 	end
