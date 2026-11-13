@@ -752,30 +752,6 @@ local function MatchesSubtype(it, filter, querySlot)
     end
 end
 
-local function UpdateDressingRoom(previewItem)
-    if not OctoBiSDressModel then return end
-    if not Planner or not Planner.dressingFrame or not Planner.dressingFrame:IsShown() then return end
-
-    pcall(function()
-        OctoBiSDressModel:SetUnit("player")
-        OctoBiSDressModel:Undress()
-
-        for _, slot in ipairs(SLOTS) do
-            local it = EquippedGear[slot.name]
-            if it and it.id then
-                OctoBiSDressModel:TryOn("item:" .. it.id .. ":0:0:0")
-            end
-        end
-
-        if previewItem and previewItem.id then
-            OctoBiSDressModel:TryOn("item:" .. previewItem.id .. ":0:0:0")
-        end
-
-        if OctoBiSDressModel.rotation then
-            OctoBiSDressModel:SetRotation(OctoBiSDressModel.rotation)
-        end
-    end)
-end
 
 local function SetupSubtypeButtons(querySlot)
     local cfg = SUBTYPE_CONFIGS.NONE
@@ -1041,7 +1017,6 @@ local function RefreshSlotDisplay(slotName)
     OctoBiSPlannerDB[CurrentProfile].enchants = EquippedEnchants
 
     UpdateStatSummary()
-    UpdateDressingRoom()
 end
 
 local function UpdateBrowserList()
@@ -1243,129 +1218,6 @@ local function BuildUI()
     Planner:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
     Planner:Hide()
 
-    -- ------------------------------------------------------------------------
-    -- ATTACHED 3D DRESSING ROOM (Docked to the left of Planner)
-    -- ------------------------------------------------------------------------
-    local dressingFrame = CreateFrame("Frame", "OctoBiSDressingFrame", Planner)
-    dressingFrame:SetWidth(186)
-    dressingFrame:SetHeight(396)
-    dressingFrame:SetPoint("TOPRIGHT", Planner, "TOPLEFT", -4, 0)
-    dressingFrame:SetFrameStrata("HIGH")
-    dressingFrame:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    dressingFrame:SetBackdropColor(0.04, 0.05, 0.08, 0.85)
-    dressingFrame:SetBackdropBorderColor(0.18, 0.55, 0.85, 0.85)
-    dressingFrame:EnableMouse(true)
-    Planner.dressingFrame = dressingFrame
-
-    local dHeader = dressingFrame:CreateTexture(nil, "BACKGROUND")
-    dHeader:SetPoint("TOPLEFT", dressingFrame, "TOPLEFT", 6, -6)
-    dHeader:SetPoint("TOPRIGHT", dressingFrame, "TOPRIGHT", -6, -6)
-    dHeader:SetHeight(24)
-    dHeader:SetTexture(0.08, 0.12, 0.18, 0.85)
-
-    local dTitle = dressingFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    dTitle:SetPoint("LEFT", dHeader, "LEFT", 8, 0)
-    dTitle:SetText("|cFF00E5FFDressing Room|r")
-
-    local dHint = dressingFrame:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    dHint:SetPoint("RIGHT", dHeader, "RIGHT", -6, 0)
-    dHint:SetText("|cFF888888Drag to turn|r")
-
-    local model = CreateFrame("DressUpModel", "OctoBiSDressModel", dressingFrame)
-    model:SetPoint("TOPLEFT", dressingFrame, "TOPLEFT", 6, -30)
-    model:SetPoint("BOTTOMRIGHT", dressingFrame, "BOTTOMRIGHT", -6, 32)
-    model:EnableMouse(true)
-    model.rotation = 0
-    model:SetRotation(0)
-
-    model:SetScript("OnMouseDown", function()
-        this.isDragging = true
-        local curX, _ = GetCursorPosition()
-        this.prevX = curX
-    end)
-    model:SetScript("OnMouseUp", function()
-        this.isDragging = false
-    end)
-    model:SetScript("OnUpdate", function()
-        if this.isDragging then
-            local curX, _ = GetCursorPosition()
-            local s = this:GetEffectiveScale() or 1
-            local diff = (curX - this.prevX) / s
-            this.prevX = curX
-            this.rotation = (this.rotation or 0) + (diff * 0.035)
-            this:SetRotation(this.rotation)
-        end
-    end)
-
-    local rotL = CreateFrame("Button", nil, dressingFrame, "UIPanelButtonTemplate")
-    rotL:SetWidth(24)
-    rotL:SetHeight(20)
-    rotL:SetPoint("BOTTOMLEFT", dressingFrame, "BOTTOMLEFT", 6, 7)
-    rotL:SetText("<")
-    rotL:SetScript("OnClick", function()
-        model.rotation = (model.rotation or 0) - 0.3
-        model:SetRotation(model.rotation)
-    end)
-
-    local rotR = CreateFrame("Button", nil, dressingFrame, "UIPanelButtonTemplate")
-    rotR:SetWidth(24)
-    rotR:SetHeight(20)
-    rotR:SetPoint("LEFT", rotL, "RIGHT", 3, 0)
-    rotR:SetText(">")
-    rotR:SetScript("OnClick", function()
-        model.rotation = (model.rotation or 0) + 0.3
-        model:SetRotation(model.rotation)
-    end)
-
-    local rstBtn = CreateFrame("Button", nil, dressingFrame, "UIPanelButtonTemplate")
-    rstBtn:SetWidth(56)
-    rstBtn:SetHeight(20)
-    rstBtn:SetPoint("LEFT", rotR, "RIGHT", 4, 0)
-    rstBtn:SetText("Reset")
-    rstBtn:SetScript("OnClick", function()
-        model.rotation = 0
-        model:SetRotation(0)
-        UpdateDressingRoom()
-    end)
-    rstBtn:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Reset Character")
-        GameTooltip:AddLine("Resets character orientation and re-dresses with all planned gear.", 1, 1, 1)
-        GameTooltip:Show()
-    end)
-    rstBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-    local undBtn = CreateFrame("Button", nil, dressingFrame, "UIPanelButtonTemplate")
-    undBtn:SetWidth(58)
-    undBtn:SetHeight(20)
-    undBtn:SetPoint("LEFT", rstBtn, "RIGHT", 3, 0)
-    undBtn:SetText("Undress")
-    undBtn:SetScript("OnClick", function()
-        model:Undress()
-    end)
-    undBtn:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Undress Character")
-        GameTooltip:AddLine("Strips model to preview individual items or clear appearance.", 1, 1, 1)
-        GameTooltip:Show()
-    end)
-    undBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-    dressingFrame:SetScript("OnShow", function()
-        UpdateDressingRoom()
-    end)
-
-    if OctoBiSPlannerDB and OctoBiSPlannerDB.show3DModel == true then
-        dressingFrame:Show()
-    else
-        dressingFrame:Hide()
-    end
-
     -- Title Bar (Modern Sleek Smoked Header)
     local titleBg = Planner:CreateTexture(nil, "BACKGROUND")
     titleBg:SetPoint("TOPLEFT", Planner, "TOPLEFT", 6, -6)
@@ -1389,30 +1241,6 @@ local function BuildUI()
     closeBtn:SetHeight(22)
     closeBtn:SetPoint("TOPRIGHT", Planner, "TOPRIGHT", -5, -6)
     closeBtn:SetScript("OnClick", function() Planner:Hide() end)
-
-    -- 3D Model Toggle Button
-    local modelToggleBtn = CreateFrame("Button", "OctoBiSModelToggleBtn", Planner, "UIPanelButtonTemplate")
-    modelToggleBtn:SetWidth(74)
-    modelToggleBtn:SetHeight(20)
-    modelToggleBtn:SetPoint("RIGHT", closeBtn, "LEFT", -4, 0)
-    modelToggleBtn:SetText("3D Model")
-    modelToggleBtn:SetScript("OnClick", function()
-        if dressingFrame:IsShown() then
-            dressingFrame:Hide()
-            if OctoBiSPlannerDB then OctoBiSPlannerDB.show3DModel = false end
-        else
-            dressingFrame:Show()
-            if OctoBiSPlannerDB then OctoBiSPlannerDB.show3DModel = true end
-            UpdateDressingRoom()
-        end
-    end)
-    modelToggleBtn:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Toggle 3D Dressing Room")
-        GameTooltip:AddLine("Click to show or hide the character 3D preview model.", 1, 1, 1)
-        GameTooltip:Show()
-    end)
-    modelToggleBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- ------------------------------------------------------------------------
     -- 1. LEFT PANEL: Paperdoll Slots (Columns 1 & 2)
@@ -1750,22 +1578,19 @@ local function BuildUI()
         row.sub = rSub
 
         row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-        row:SetScript("OnClick", function()
+        row:SetScript("OnClick", function(button)
+            local btn = button or arg1
             if not this.item then return end
-            if arg1 == "RightButton" or IsControlKeyDown() then
-                -- Right-Click or Ctrl-Click: Preview 3D appearance without altering equipped gear
-                if OctoBiSDressModel and Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
-                    OctoBiSDressModel:TryOn("item:" .. this.item.id .. ":0:0:0")
+            if btn == "RightButton" or IsControlKeyDown() then
+                -- Preview item appearance in Blizzard's native Dressing Room
+                if DressUpItemLink then
+                    DressUpItemLink("item:" .. this.item.id .. ":0:0:0")
                 end
             else
-                -- Left-Click: Equip item in planner slot, update stats, and update 3D model
+                -- Left-Click: Equip item in planner slot and update stats
                 if ActiveSlot then
                     EquippedGear[ActiveSlot.name] = this.item
                     RefreshSlotDisplay(ActiveSlot.name)
-                    UpdateStatsDisplay()
-                    if OctoBiSDressModel and Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
-                        OctoBiSDressModel:TryOn("item:" .. this.item.id .. ":0:0:0")
-                    end
                 end
             end
         end)
@@ -1775,9 +1600,7 @@ local function BuildUI()
             if this.item then
                 GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
                 GameTooltip:SetHyperlink("item:" .. this.item.id .. ":0:0:0")
-                if Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
-                    GameTooltip:AddLine("<Left-Click: Equip | Right-Click: Preview 3D>", 0.2, 0.9, 1.0)
-                end
+                GameTooltip:AddLine("<Left-Click: Equip | Right-Click: Dressing Room>", 0.2, 0.9, 1.0)
                 GameTooltip:Show()
             end
         end)
@@ -2254,15 +2077,7 @@ function OctoBiSPlanner_Toggle()
             Planner:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
         end
         Planner:Show()
-        if Planner.dressingFrame then
-            if OctoBiSPlannerDB and OctoBiSPlannerDB.show3DModel == false then
-                Planner.dressingFrame:Hide()
-            else
-                Planner.dressingFrame:Show()
-            end
-        end
         UpdateStatSummary()
-        UpdateDressingRoom()
         if UpdateSetUI then UpdateSetUI() end
         if not ActiveSlot then
             OpenSlotBrowser(SLOTS[1])
