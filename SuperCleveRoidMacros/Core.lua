@@ -6623,17 +6623,17 @@ local function InitWarriorCombatHUD()
                     btn.timerText:SetText("10")
                     btn.timerText:SetTextColor(1, 1, 0.2, 1)
                 elseif i == 2 then
-                    -- CD preview (heavily dimmed down)
-                    btn.icon:SetAlpha(0.18)
-                    btn.icon:SetVertexColor(0.35, 0.35, 0.35)
-                    btn:SetBackdropBorderColor(0.20, 0.20, 0.20, 0.8)
+                    -- CD preview (dark like Battle Shout)
+                    btn.icon:SetAlpha(0.22)
+                    btn.icon:SetVertexColor(0.40, 0.40, 0.45)
+                    btn:SetBackdropBorderColor(0.18, 0.18, 0.20, 0.8)
                     btn.timerText:SetText("8m")
                     btn.timerText:SetTextColor(1, 1, 1, 1)
                 else
-                    -- Ready preview
-                    btn.icon:SetAlpha(1.0)
-                    btn.icon:SetVertexColor(1.0, 1.0, 1.0)
-                    local bc = isDef and { 0.2, 0.8, 1.0, 0.9 } or { 1.0, 0.4, 0.2, 0.9 }
+                    -- Ready preview (dark like Battle Shout with subtle border)
+                    btn.icon:SetAlpha(0.22)
+                    btn.icon:SetVertexColor(0.40, 0.40, 0.45)
+                    local bc = isDef and { 0.25, 0.50, 0.75, 0.50 } or { 0.75, 0.40, 0.20, 0.50 }
                     btn:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4])
                     btn.timerText:SetText("")
                 end
@@ -6665,28 +6665,28 @@ local function InitWarriorCombatHUD()
                 if start and duration and duration > 2.0 then
                     local rem = (start + duration) - GetTime()
                     if rem > 0 then
-                        -- On COOLDOWN! Heavily dimmed down and desaturated
+                        -- On COOLDOWN: Dark like Battle Shout with countdown
                         btn:Show()
-                        btn.icon:SetAlpha(0.18)
-                        btn.icon:SetVertexColor(0.35, 0.35, 0.35)
-                        btn:SetBackdropBorderColor(0.20, 0.20, 0.20, 0.8)
+                        btn.icon:SetAlpha(0.22)
+                        btn.icon:SetVertexColor(0.40, 0.40, 0.45)
+                        btn:SetBackdropBorderColor(0.18, 0.18, 0.20, 0.8)
                         btn.timerText:SetTextColor(1, 1, 1, 1)
                         btn.timerText:SetText(rem > 60 and string.format("%dm", math.ceil(rem / 60)) or string.format("%ds", math.ceil(rem)))
                     else
-                        -- Off Cooldown (READY!)
+                        -- Off Cooldown (READY): Dark like Battle Shout with subtle border
                         btn:Show()
-                        btn.icon:SetAlpha(1.0)
-                        btn.icon:SetVertexColor(1.0, 1.0, 1.0)
-                        local bc = isDef and { 0.2, 0.8, 1.0, 0.9 } or { 1.0, 0.4, 0.2, 0.9 }
+                        btn.icon:SetAlpha(0.22)
+                        btn.icon:SetVertexColor(0.40, 0.40, 0.45)
+                        local bc = isDef and { 0.25, 0.50, 0.75, 0.50 } or { 0.75, 0.40, 0.20, 0.50 }
                         btn:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4])
                         btn.timerText:SetText("")
                     end
                 else
-                    -- READY / AVAILABLE TO USE! ("GOT MY CDS BACK")
+                    -- READY / AVAILABLE TO USE: Dark like Battle Shout with subtle border
                     btn:Show()
-                    btn.icon:SetAlpha(1.0)
-                    btn.icon:SetVertexColor(1.0, 1.0, 1.0)
-                    local bc = isDef and { 0.2, 0.8, 1.0, 0.9 } or { 1.0, 0.4, 0.2, 0.9 }
+                    btn.icon:SetAlpha(0.22)
+                    btn.icon:SetVertexColor(0.40, 0.40, 0.45)
+                    local bc = isDef and { 0.25, 0.50, 0.75, 0.50 } or { 0.75, 0.40, 0.20, 0.50 }
                     btn:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4])
                     btn.timerText:SetText("")
                 end
