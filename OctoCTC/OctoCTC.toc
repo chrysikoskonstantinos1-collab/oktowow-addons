@@ -1,0 +1,7 @@
+## Interface: 11200
+## Title: |cFF00FFCCOcto|rCTC
+## Notes: Live Combat Table Coverage (CTC) & Uncrushable display for Protection Warriors.
+## Author: Antigravity
+## Version: 1.0
+## SavedVariables: OctoCTCDB
+OctoCTC.lua
