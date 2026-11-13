@@ -6316,12 +6316,17 @@ local function InitWarriorCombatHUD()
     local hamIcon      = CreateAuraIcon("hamstring", "Interface\\Icons\\Ability_ShockWave", -36, -75)
     local msIcon       = CreateAuraIcon("ms", "Interface\\Icons\\Ability_Warrior_SavageBlow", 0, -75)
     local opIcon       = CreateAuraIcon("overpower", "Interface\\Icons\\Ability_MeleeDamage", 36, -75)
+    local revIcon      = CreateAuraIcon("revenge", "Interface\\Icons\\Ability_Warrior_Revenge", 36, -110)
+    local demoIcon     = CreateAuraIcon("demo", "Interface\\Icons\\Ability_Warrior_WarCry", -36, -110)
+    local tcIcon       = CreateAuraIcon("thunderclap", "Interface\\Icons\\Spell_Nature_ThunderClap", 0, -110)
     local bsIcon       = CreateAuraIcon("battleshout", "Interface\\Icons\\Ability_Warrior_BattleShout", 72, -75)
     local rendAuraIcon = CreateAuraIcon("rend_icon", "Interface\\Icons\\Ability_Gouge", 108, -75)
 
-    -- Overpower Proc Tracking
+    -- Overpower & Revenge Proc Tracking
     local opActive = false
     local opExpires = 0
+    local revActive = false
+    local revExpires = 0
 
     -- Rend Internal Tick & Duration Tracking
     local rendStartTime = 0
@@ -6702,7 +6707,11 @@ local function InitWarriorCombatHUD()
             hamIcon:Hide()
             msIcon:Hide()
             opIcon:Hide()
+            revIcon:Hide()
+            demoIcon:Hide()
+            tcIcon:Hide()
             bsIcon:Hide()
+            rendAuraIcon:Hide()
             rendBar:Hide()
             return
         end
@@ -6720,6 +6729,15 @@ local function InitWarriorCombatHUD()
 
             opIcon:Show(); opIcon.icon:SetAlpha(1); opIcon:SetBackdropBorderColor(1, 0.85, 0, 1)
             opIcon.timerText:SetText("5.0"); opIcon.stackText:SetText("OP"); opIcon.stackText:SetTextColor(1, 0.9, 0.2, 1)
+
+            revIcon:Show(); revIcon.icon:SetAlpha(1); revIcon:SetBackdropBorderColor(1, 0.65, 0, 1)
+            revIcon.timerText:SetText("5.0"); revIcon.stackText:SetText("REV"); revIcon.stackText:SetTextColor(1, 0.85, 0.2, 1)
+
+            demoIcon:Show(); demoIcon.icon:SetAlpha(1); demoIcon:SetBackdropBorderColor(0.2, 0.75, 0.95, 1)
+            demoIcon.timerText:SetText("30"); demoIcon.stackText:SetText("")
+
+            tcIcon:Show(); tcIcon.icon:SetAlpha(1); tcIcon:SetBackdropBorderColor(0.3, 0.55, 1.0, 1)
+            tcIcon.timerText:SetText("20"); tcIcon.stackText:SetText("")
 
             bsIcon:Show(); bsIcon.icon:SetAlpha(1); bsIcon:SetBackdropBorderColor(0.2, 0.6, 1.0, 1)
             bsIcon.timerText:SetText("2m")
@@ -6803,6 +6821,73 @@ local function InitWarriorCombatHUD()
         else
             opActive = false
             opIcon:Hide()
+        end
+
+        -- 4b. Revenge Proc (only visible when usable / block, dodge, or parry occurred)
+        local hasRevProc = (revActive and now < revExpires)
+        if not hasRevProc and CleveRoids.HasReactiveProc and CleveRoids.HasReactiveProc("Revenge") then
+            hasRevProc = true
+            if CleveRoids.reactiveProcs and CleveRoids.reactiveProcs["Revenge"] and CleveRoids.reactiveProcs["Revenge"].expiry then
+                revExpires = CleveRoids.reactiveProcs["Revenge"].expiry
+            else
+                revExpires = now + 5.0
+            end
+        end
+
+        if hasRevProc and now < revExpires then
+            local rem = revExpires - now
+            revIcon:Show()
+            revIcon.icon:SetAlpha(1.0)
+            revIcon.icon:Show()
+            revIcon:SetBackdropBorderColor(1, 0.65, 0, 1) -- Fiery amber/gold glowing border!
+            revIcon.timerText:SetText(string.format("%.1f", rem))
+            revIcon.stackText:SetText("REV")
+            revIcon.stackText:SetTextColor(1, 0.85, 0.2, 1)
+        else
+            revActive = false
+            revIcon:Hide()
+        end
+
+        -- 4c. Demoralizing Shout (target debuff / missing alert in combat)
+        local demoName, _, _, demoRem = ScanAura("target", "Demoralizing Shout", "HARMFUL")
+        if demoName then
+            demoIcon:Show()
+            demoIcon.icon:SetAlpha(1.0)
+            demoIcon.icon:Show()
+            demoIcon:SetBackdropBorderColor(0.2, 0.75, 0.95, 0.85) -- Cyan debuff border
+            demoIcon.timerText:SetText(demoRem > 0 and string.format("%d", math.ceil(demoRem)) or "")
+            demoIcon.stackText:SetText("")
+        elseif UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") and UnitAffectingCombat("player") then
+            -- Missing alert in combat!
+            demoIcon:Show()
+            demoIcon.icon:SetAlpha(0.65)
+            demoIcon.icon:Show()
+            demoIcon:SetBackdropBorderColor(1, 0.2, 0.2, 0.9) -- Red warning border
+            demoIcon.timerText:SetText("|cffff2020!|r")
+            demoIcon.stackText:SetText("")
+        else
+            demoIcon:Hide()
+        end
+
+        -- 4d. Thunder Clap (target debuff / missing alert in combat)
+        local tcName, _, _, tcRem = ScanAura("target", "Thunder Clap", "HARMFUL")
+        if tcName then
+            tcIcon:Show()
+            tcIcon.icon:SetAlpha(1.0)
+            tcIcon.icon:Show()
+            tcIcon:SetBackdropBorderColor(0.3, 0.55, 1.0, 0.85) -- Electric blue border
+            tcIcon.timerText:SetText(tcRem > 0 and string.format("%d", math.ceil(tcRem)) or "")
+            tcIcon.stackText:SetText("")
+        elseif UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") and UnitAffectingCombat("player") then
+            -- Missing alert in combat!
+            tcIcon:Show()
+            tcIcon.icon:SetAlpha(0.65)
+            tcIcon.icon:Show()
+            tcIcon:SetBackdropBorderColor(1, 0.45, 0.1, 0.9) -- Orange/red warning border
+            tcIcon.timerText:SetText("|cffff8020!|r")
+            tcIcon.stackText:SetText("")
+        else
+            tcIcon:Hide()
         end
 
         -- 5. Battle Shout
@@ -7185,6 +7270,8 @@ local function InitWarriorCombatHUD()
     eventFrame:RegisterEvent("UNIT_AURA")
     eventFrame:RegisterEvent("CHAT_MSG_COMBAT_SELF_HITS")
     eventFrame:RegisterEvent("CHAT_MSG_COMBAT_SELF_MISSES")
+    eventFrame:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES")
+    eventFrame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES")
     eventFrame:RegisterEvent("CHAT_MSG_SPELL_SELF_DAMAGE")
     eventFrame:RegisterEvent("CHAT_MSG_SPELL_PERIODIC_CREATURE_DAMAGE")
 
@@ -7199,6 +7286,15 @@ local function InitWarriorCombatHUD()
         elseif event == "PLAYER_SWING" then
             if arg2 == 0 or arg2 == nil then -- Main hand swing
                 TriggerSwing(arg1)
+            end
+        elseif event == "CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES" or event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES" then
+            if arg1 then
+                local lowerMsg = string.lower(arg1)
+                if string.find(lowerMsg, "block") or string.find(lowerMsg, "dodge") or string.find(lowerMsg, "parry") then
+                    revActive = true
+                    revExpires = GetTime() + 5.0
+                    UpdateAuras()
+                end
             end
         elseif event == "CHAT_MSG_COMBAT_SELF_MISSES" then
             if arg1 and string.find(string.lower(arg1), "dodge") then
@@ -7216,6 +7312,9 @@ local function InitWarriorCombatHUD()
                     UpdateAuras()
                 elseif string.find(lowerMsg, "overpower") then
                     opActive = false
+                    UpdateAuras()
+                elseif string.find(lowerMsg, "revenge") then
+                    revActive = false
                     UpdateAuras()
                 elseif string.find(lowerMsg, "rend") then
                     rendStartTime = GetTime()
@@ -7252,6 +7351,10 @@ local function InitWarriorCombatHUD()
             end
             if spellName and string.find(string.lower(spellName), "overpower") then
                 opActive = false
+                UpdateAuras()
+            end
+            if spellName and string.find(string.lower(spellName), "revenge") then
+                revActive = false
                 UpdateAuras()
             end
             if is2H and spellName and string.find(string.lower(spellName), "slam") then
@@ -7825,7 +7928,10 @@ local function InitWarriorCombatHUD()
         hamIcon:SetWidth(26);    hamIcon:SetHeight(26)
         msIcon:SetWidth(26);     msIcon:SetHeight(26)
         opIcon:SetWidth(26);     opIcon:SetHeight(26)
-        bsIcon:SetWidth(26);       bsIcon:SetHeight(26)
+        revIcon:SetWidth(26);    revIcon:SetHeight(26)
+        demoIcon:SetWidth(26);   demoIcon:SetHeight(26)
+        tcIcon:SetWidth(26);     tcIcon:SetHeight(26)
+        bsIcon:SetWidth(26);     bsIcon:SetHeight(26)
         rendAuraIcon:SetWidth(26); rendAuraIcon:SetHeight(26)
         rendBar:SetWidth(190);     rendBar:SetHeight(12)
         rageBar:SetWidth(190);   rageBar:SetHeight(14)
@@ -7870,7 +7976,10 @@ local function InitWarriorCombatHUD()
         hamIcon:ClearAllPoints();    hamIcon:SetPoint("CENTER", UIParent, "CENTER", -36, -75); hamIcon:SetWidth(26); hamIcon:SetHeight(26)
         msIcon:ClearAllPoints();     msIcon:SetPoint("CENTER", UIParent, "CENTER", 0, -75);   msIcon:SetWidth(26); msIcon:SetHeight(26)
         opIcon:ClearAllPoints();     opIcon:SetPoint("CENTER", UIParent, "CENTER", 36, -75);  opIcon:SetWidth(26); opIcon:SetHeight(26)
-        bsIcon:ClearAllPoints();       bsIcon:SetPoint("CENTER", UIParent, "CENTER", 72, -75);   bsIcon:SetWidth(26); bsIcon:SetHeight(26)
+        revIcon:ClearAllPoints();    revIcon:SetPoint("CENTER", UIParent, "CENTER", 36, -110); revIcon:SetWidth(26); revIcon:SetHeight(26)
+        demoIcon:ClearAllPoints();   demoIcon:SetPoint("CENTER", UIParent, "CENTER", -36, -110); demoIcon:SetWidth(26); demoIcon:SetHeight(26)
+        tcIcon:ClearAllPoints();     tcIcon:SetPoint("CENTER", UIParent, "CENTER", 0, -110);   tcIcon:SetWidth(26); tcIcon:SetHeight(26)
+        bsIcon:ClearAllPoints();     bsIcon:SetPoint("CENTER", UIParent, "CENTER", 72, -75);   bsIcon:SetWidth(26); bsIcon:SetHeight(26)
         rendAuraIcon:ClearAllPoints(); rendAuraIcon:SetPoint("CENTER", UIParent, "CENTER", 108, -75); rendAuraIcon:SetWidth(26); rendAuraIcon:SetHeight(26)
         rendBar:ClearAllPoints();      rendBar:SetPoint("CENTER", UIParent, "CENTER", 0, -100);  rendBar:SetWidth(190); rendBar:SetHeight(12)
         rageBar:ClearAllPoints();    rageBar:SetPoint("CENTER", UIParent, "CENTER", 0, -146); rageBar:SetWidth(190); rageBar:SetHeight(14)
