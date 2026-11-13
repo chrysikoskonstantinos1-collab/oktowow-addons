@@ -6319,6 +6319,7 @@ local function InitWarriorCombatHUD()
     local revIcon      = CreateAuraIcon("revenge", "Interface\\Icons\\Ability_Warrior_Revenge", 36, -110)
     local demoIcon     = CreateAuraIcon("demo", "Interface\\Icons\\Ability_Warrior_WarCry", -36, -110)
     local tcIcon       = CreateAuraIcon("thunderclap", "Interface\\Icons\\Spell_Nature_ThunderClap", 0, -110)
+    local sbBuffIcon   = CreateAuraIcon("shield_buff", "Interface\\Icons\\Ability_Defend", 72, -110)
     local bsIcon       = CreateAuraIcon("battleshout", "Interface\\Icons\\Ability_Warrior_BattleShout", 72, -75)
     local rendAuraIcon = CreateAuraIcon("rend_icon", "Interface\\Icons\\Ability_Gouge", 108, -75)
 
@@ -6710,6 +6711,7 @@ local function InitWarriorCombatHUD()
             revIcon:Hide()
             demoIcon:Hide()
             tcIcon:Hide()
+            sbBuffIcon:Hide()
             bsIcon:Hide()
             rendAuraIcon:Hide()
             rendBar:Hide()
@@ -6738,6 +6740,9 @@ local function InitWarriorCombatHUD()
 
             tcIcon:Show(); tcIcon.icon:SetAlpha(1); tcIcon:SetBackdropBorderColor(0.3, 0.55, 1.0, 1)
             tcIcon.timerText:SetText("20"); tcIcon.stackText:SetText("")
+
+            sbBuffIcon:Show(); sbBuffIcon.icon:SetAlpha(1); sbBuffIcon.icon:SetVertexColor(1, 1, 1); sbBuffIcon:SetBackdropBorderColor(0.2, 1.0, 0.35, 1)
+            sbBuffIcon.timerText:SetText("5.0"); sbBuffIcon.stackText:SetText("2"); sbBuffIcon.stackText:SetTextColor(1, 1, 0.2, 1)
 
             bsIcon:Show(); bsIcon.icon:SetAlpha(1); bsIcon:SetBackdropBorderColor(0.2, 0.6, 1.0, 1)
             bsIcon.timerText:SetText("2m")
@@ -6907,6 +6912,82 @@ local function InitWarriorCombatHUD()
             bsIcon.icon:SetAlpha(0.8)
             bsIcon:SetBackdropBorderColor(1, 0.1, 0.1, 1)
             bsIcon.timerText:SetText("|cffff2020!|r")
+        end
+
+        -- 5b. Shield Block / Shield Slam Buff Indicator
+        local sbBuffActive = false
+        local sbBuffRem = 0
+        local sbBuffStacks = 0
+
+        -- 1. Check "Shield Block" buff
+        local sbName, sbApps, sbDur, sRem = ScanAura("player", "Shield Block", "HELPFUL")
+        if sbName then
+            sbBuffActive = true
+            sbBuffRem = sRem or 0
+            sbBuffStacks = sbApps or 0
+        end
+
+        -- 2. Check "Shield Slam" buff (for servers/procs that grant block on Shield Slam)
+        if not sbBuffActive then
+            local ssName, ssApps, ssDur, ssRem = ScanAura("player", "Shield Slam", "HELPFUL")
+            if ssName then
+                sbBuffActive = true
+                sbBuffRem = ssRem or 0
+                sbBuffStacks = ssApps or 0
+            end
+        end
+
+        -- 3. Fallback: Check UnitBuff textures directly
+        if not sbBuffActive then
+            for i = 1, 32 do
+                local bTex, bApps = UnitBuff("player", i)
+                if not bTex then break end
+                local bTexLower = string.lower(bTex)
+                if string.find(bTexLower, "ability_defend") or string.find(bTexLower, "shieldblock") or string.find(bTexLower, "shield_slam") then
+                    sbBuffActive = true
+                    sbBuffStacks = bApps or 0
+                    break
+                end
+            end
+        end
+
+        local inCombat = UnitAffectingCombat("player") or swingActive or slamCasting
+        local hasShield = false
+        local offhandTex = GetInventoryItemTexture("player", 17)
+        if offhandTex then
+            local offLower = string.lower(offhandTex)
+            if string.find(offLower, "shield") or string.find(offLower, "defend") then
+                hasShield = true
+            end
+        end
+
+        if sbBuffActive then
+            -- ACTIVE BUFF: Vibrant and fully illuminated with countdown & stacks!
+            sbBuffIcon:Show()
+            sbBuffIcon.icon:SetAlpha(1.0)
+            sbBuffIcon.icon:SetVertexColor(1.0, 1.0, 1.0)
+            sbBuffIcon:SetBackdropBorderColor(0.2, 1.0, 0.35, 1.0) -- Radiant green glow
+            if sbBuffRem > 0 then
+                sbBuffIcon.timerText:SetText(sbBuffRem > 9.9 and string.format("%ds", math.ceil(sbBuffRem)) or string.format("%.1f", sbBuffRem))
+            else
+                sbBuffIcon.timerText:SetText("")
+            end
+            if sbBuffStacks and sbBuffStacks > 0 then
+                sbBuffIcon.stackText:SetText(tostring(sbBuffStacks))
+                sbBuffIcon.stackText:SetTextColor(1, 1, 0.2, 1)
+            else
+                sbBuffIcon.stackText:SetText("")
+            end
+        elseif inCombat or hasShield or isUnlocked then
+            -- NO BUFF: Dimmed down with a gentle, soft ambient light around it so it doesn't bother you!
+            sbBuffIcon:Show()
+            sbBuffIcon.icon:SetAlpha(0.22)
+            sbBuffIcon.icon:SetVertexColor(0.40, 0.40, 0.45)
+            sbBuffIcon:SetBackdropBorderColor(0.35, 0.55, 0.75, 0.40) -- Soft ambient light border
+            sbBuffIcon.timerText:SetText("")
+            sbBuffIcon.stackText:SetText("")
+        else
+            sbBuffIcon:Hide()
         end
 
         -- 6. Rend Aura Icon (like Hamstring, Sunder, Mortal Strike) & Accurate 3s Bleed Ticks
@@ -7931,6 +8012,7 @@ local function InitWarriorCombatHUD()
         revIcon:SetWidth(26);    revIcon:SetHeight(26)
         demoIcon:SetWidth(26);   demoIcon:SetHeight(26)
         tcIcon:SetWidth(26);     tcIcon:SetHeight(26)
+        sbBuffIcon:SetWidth(26); sbBuffIcon:SetHeight(26)
         bsIcon:SetWidth(26);     bsIcon:SetHeight(26)
         rendAuraIcon:SetWidth(26); rendAuraIcon:SetHeight(26)
         rendBar:SetWidth(190);     rendBar:SetHeight(12)
@@ -7979,6 +8061,7 @@ local function InitWarriorCombatHUD()
         revIcon:ClearAllPoints();    revIcon:SetPoint("CENTER", UIParent, "CENTER", 36, -110); revIcon:SetWidth(26); revIcon:SetHeight(26)
         demoIcon:ClearAllPoints();   demoIcon:SetPoint("CENTER", UIParent, "CENTER", -36, -110); demoIcon:SetWidth(26); demoIcon:SetHeight(26)
         tcIcon:ClearAllPoints();     tcIcon:SetPoint("CENTER", UIParent, "CENTER", 0, -110);   tcIcon:SetWidth(26); tcIcon:SetHeight(26)
+        sbBuffIcon:ClearAllPoints(); sbBuffIcon:SetPoint("CENTER", UIParent, "CENTER", 72, -110); sbBuffIcon:SetWidth(26); sbBuffIcon:SetHeight(26)
         bsIcon:ClearAllPoints();     bsIcon:SetPoint("CENTER", UIParent, "CENTER", 72, -75);   bsIcon:SetWidth(26); bsIcon:SetHeight(26)
         rendAuraIcon:ClearAllPoints(); rendAuraIcon:SetPoint("CENTER", UIParent, "CENTER", 108, -75); rendAuraIcon:SetWidth(26); rendAuraIcon:SetHeight(26)
         rendBar:ClearAllPoints();      rendBar:SetPoint("CENTER", UIParent, "CENTER", 0, -100);  rendBar:SetWidth(190); rendBar:SetHeight(12)
