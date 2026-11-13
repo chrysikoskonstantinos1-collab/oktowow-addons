@@ -111,7 +111,7 @@ end
 local function BuildCTCUI()
     if Frame.isBuilt then return end
 
-    Frame:SetWidth(164)
+    Frame:SetWidth(184)
     Frame:SetHeight(38)
     Frame:SetPoint("CENTER", UIParent, "CENTER", 0, -170)
     Frame:SetFrameStrata("MEDIUM")
@@ -129,31 +129,50 @@ local function BuildCTCUI()
     Frame:SetBackdropColor(0.04, 0.05, 0.08, 0.85)
     Frame:SetBackdropBorderColor(0.2, 0.35, 0.5, 0.8)
 
-    -- Shield Icon indicator
-    local shieldIcon = Frame:CreateTexture(nil, "ARTWORK")
-    shieldIcon:SetWidth(20)
-    shieldIcon:SetHeight(20)
-    shieldIcon:SetPoint("LEFT", Frame, "LEFT", 6, 0)
-    shieldIcon:SetTexture("Interface\\Icons\\Ability_Warrior_ShieldBlock")
+    -- Small Shield Icon perched on top of the box
+    local iconFrame = CreateFrame("Frame", "OctoCTCShieldIcon", Frame)
+    iconFrame:SetWidth(20)
+    iconFrame:SetHeight(20)
+    iconFrame:SetPoint("BOTTOM", Frame, "TOP", 0, 2)
+    iconFrame:SetFrameStrata("MEDIUM")
+    iconFrame:SetBackdrop({
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    iconFrame:SetBackdropBorderColor(0.2, 0.35, 0.5, 0.9)
+    iconFrame:EnableMouse(true)
+
+    local iconBg = iconFrame:CreateTexture(nil, "BACKGROUND")
+    iconBg:SetAllPoints(iconFrame)
+    iconBg:SetTexture(0.04, 0.05, 0.08, 0.95)
+
+    local shieldIcon = iconFrame:CreateTexture(nil, "ARTWORK")
+    shieldIcon:SetPoint("TOPLEFT", iconFrame, "TOPLEFT", 1, -1)
+    shieldIcon:SetPoint("BOTTOMRIGHT", iconFrame, "BOTTOMRIGHT", -1, 1)
+    shieldIcon:SetTexture("Interface\\Icons\\Ability_Defend")
     shieldIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     Frame.shieldIcon = shieldIcon
+    Frame.iconFrame = iconFrame
 
-    -- Main CTC Status Text
+    -- Main CTC Status Text (Properly centered in the top half of the box)
     local mainText = Frame:CreateFontString(nil, "OVERLAY")
     mainText:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
-    mainText:SetPoint("TOPLEFT", shieldIcon, "TOPRIGHT", 6, 1)
+    mainText:SetPoint("TOP", Frame, "TOP", 0, -6)
+    mainText:SetJustifyH("CENTER")
     mainText:SetText("CTC: 102.4%")
     Frame.mainText = mainText
 
-    -- Subtext: Breakdown (Miss, Dodge, Parry, Block)
+    -- Subtext: Breakdown (Properly centered in the bottom half of the box)
     local subText = Frame:CreateFontString(nil, "OVERLAY")
     subText:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
-    subText:SetPoint("BOTTOMLEFT", shieldIcon, "BOTTOMRIGHT", 6, -1)
-    subText:SetTextColor(0.75, 0.75, 0.75, 1)
+    subText:SetPoint("BOTTOM", Frame, "BOTTOM", 0, 6)
+    subText:SetJustifyH("CENTER")
+    subText:SetTextColor(0.8, 0.8, 0.8, 1)
     subText:SetText("M:5% D:10% P:7% B:8% Def:340")
     Frame.subText = subText
 
-    -- Dragging & Position Saving
+    -- Dragging & Position Saving from Frame
     Frame:RegisterForDrag("LeftButton")
     Frame:SetScript("OnDragStart", function()
         if not (OctoCTCDB and OctoCTCDB.locked) then
@@ -168,6 +187,31 @@ local function BuildCTCUI()
         OctoCTCDB.relPoint = relPoint
         OctoCTCDB.x = x
         OctoCTCDB.y = y
+    end)
+
+    -- Also allow Dragging from the Shield Icon
+    iconFrame:RegisterForDrag("LeftButton")
+    iconFrame:SetScript("OnDragStart", function()
+        if not (OctoCTCDB and OctoCTCDB.locked) then
+            Frame:StartMoving()
+        end
+    end)
+    iconFrame:SetScript("OnDragStop", function()
+        Frame:StopMovingOrSizing()
+        local point, _, relPoint, x, y = Frame:GetPoint()
+        OctoCTCDB = OctoCTCDB or {}
+        OctoCTCDB.point = point
+        OctoCTCDB.relPoint = relPoint
+        OctoCTCDB.x = x
+        OctoCTCDB.y = y
+    end)
+    iconFrame:SetScript("OnEnter", function()
+        local onEnter = Frame:GetScript("OnEnter")
+        if onEnter then onEnter() end
+    end)
+    iconFrame:SetScript("OnLeave", function()
+        local onLeave = Frame:GetScript("OnLeave")
+        if onLeave then onLeave() end
     end)
 
     -- Tooltip on Hover
@@ -239,13 +283,25 @@ local function UpdateCTCDisplay()
         -- UNCRUSHABLE! Glowing green
         Frame.mainText:SetText(string.format("|cff20ff20CTC: %.1f%%|r |cff00ffcc[UNCRUSH]|r", ctc))
         Frame:SetBackdropBorderColor(0.1, 0.9, 0.2, 0.9)
+        if Frame.iconFrame then
+            Frame.iconFrame:SetBackdropBorderColor(0.1, 0.9, 0.2, 1.0)
+        end
         Frame.shieldIcon:SetVertexColor(1, 1, 1, 1)
     else
         -- Vulnerable to crushing blows
         local needed = targetCTC - ctc
         Frame.mainText:SetText(string.format("|cffffd100CTC: %.1f%%|r |cffff6060(-%.1f%%)|r", ctc, needed))
-        Frame:SetBackdropBorderColor(0.4, 0.4, 0.45, 0.8)
+        Frame:SetBackdropBorderColor(0.25, 0.35, 0.45, 0.85)
+        if Frame.iconFrame then
+            Frame.iconFrame:SetBackdropBorderColor(0.25, 0.35, 0.45, 0.9)
+        end
         Frame.shieldIcon:SetVertexColor(0.85, 0.85, 0.85, 0.9)
+    end
+
+    -- If Shield Block active (+75% block), highlight shield frame in golden yellow!
+    if sbActive and Frame.iconFrame then
+        Frame.iconFrame:SetBackdropBorderColor(1.0, 0.85, 0.2, 1.0)
+        Frame.shieldIcon:SetVertexColor(1, 1, 1, 1)
     end
 
     -- Sub-line breakdown
