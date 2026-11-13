@@ -7298,22 +7298,25 @@ local function InitWarriorCombatHUD()
     })
     stanceAdvisor:SetBackdropBorderColor(0.2, 0.95, 0.2, 1.0)
 
-    local sGlow = stanceAdvisor:CreateTexture(nil, "OVERLAY")
-    sGlow:SetPoint("TOPLEFT", stanceAdvisor, "TOPLEFT", -3, 3)
-    sGlow:SetPoint("BOTTOMRIGHT", stanceAdvisor, "BOTTOMRIGHT", 3, -3)
-    sGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
-    sGlow:SetBlendMode("ADD")
-    sGlow:SetVertexColor(0.2, 0.95, 0.2, 0.65)
-    stanceAdvisor.glow = sGlow
+    -- Full-size outer border frame matching exact icon size (replaces internal inset box)
+    local borderFrame = CreateFrame("Frame", nil, stanceAdvisor)
+    borderFrame:SetAllPoints(stanceAdvisor)
+    borderFrame:SetFrameLevel(stanceAdvisor:GetFrameLevel() + 2)
+    borderFrame:SetBackdrop({
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    stanceAdvisor.border = borderFrame
 
-    local sLossText = stanceAdvisor:CreateFontString(nil, "OVERLAY")
+    local sLossText = borderFrame:CreateFontString(nil, "OVERLAY")
     sLossText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
     sLossText:SetPoint("CENTER", stanceAdvisor, "CENTER", 0, 0)
     sLossText:SetTextColor(0.2, 1.0, 0.2, 1.0)
     sLossText:SetText("0")
     stanceAdvisor.lossText = sLossText
 
-    local sStatusText = stanceAdvisor:CreateFontString(nil, "OVERLAY")
+    local sStatusText = borderFrame:CreateFontString(nil, "OVERLAY")
     sStatusText:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
     sStatusText:SetPoint("TOP", stanceAdvisor, "BOTTOM", 0, -1)
     sStatusText:SetTextColor(0.2, 1.0, 0.2, 1.0)
@@ -7485,25 +7488,30 @@ local function InitWarriorCombatHUD()
         -- Stance loss calculation
         local loss = math.max(0, curRage - tmRage)
 
-        -- Update live feedback colors & text
+        -- Smooth pulsating glow breathing frequency matching Battle Shout (~1.65s cycle)
+        local now = GetTime()
+        local pulse = (math.sin(now * 3.8) + 1) * 0.5
+        local pulseAlpha = 0.15 + (pulse * 0.85)
+
+        -- Update live feedback colors & pulsating outer border box
         if loss == 0 then
             -- Green: Zero Loss / Safe to change stance
-            stanceAdvisor:SetBackdropBorderColor(0.2, 0.95, 0.2, 0.95)
-            if sGlow then sGlow:SetVertexColor(0.2, 0.95, 0.2, 0.65) end
+            stanceAdvisor:SetBackdropBorderColor(0.2, 0.95, 0.2, pulseAlpha)
+            if borderFrame then borderFrame:SetBackdropBorderColor(0.2, 1.0, 0.2, pulseAlpha) end
             if sLossText then sLossText:SetText("|cFF20FF200|r") end
             if sStatusText then sStatusText:SetText("|cFF20FF20SAFE|r") end
             stanceDeltaText:SetText("|cFF20FF20[Safe]|r")
         elseif loss <= 20 then
             -- Orange: Moderate Loss (10-20 rage)
-            stanceAdvisor:SetBackdropBorderColor(1.0, 0.6, 0.0, 0.95)
-            if sGlow then sGlow:SetVertexColor(1.0, 0.6, 0.0, 0.75) end
+            stanceAdvisor:SetBackdropBorderColor(1.0, 0.60, 0.0, pulseAlpha)
+            if borderFrame then borderFrame:SetBackdropBorderColor(1.0, 0.60, 0.0, pulseAlpha) end
             if sLossText then sLossText:SetText(string.format("|cFFFF9900-%d|r", loss)) end
             if sStatusText then sStatusText:SetText("|cFFFF9900WARN|r") end
             stanceDeltaText:SetText(string.format("|cFFFF9900-%d|r", loss))
         else
             -- Red: Heavy Loss (> 20 rage) - NOT WORTH IT!
-            stanceAdvisor:SetBackdropBorderColor(1.0, 0.15, 0.15, 1.0)
-            if sGlow then sGlow:SetVertexColor(1.0, 0.15, 0.15, 0.9) end
+            stanceAdvisor:SetBackdropBorderColor(1.0, 0.15, 0.15, pulseAlpha)
+            if borderFrame then borderFrame:SetBackdropBorderColor(1.0, 0.15, 0.15, pulseAlpha) end
             if sLossText then sLossText:SetText(string.format("|cFFFF2020-%d|r", loss)) end
             if sStatusText then sStatusText:SetText("|cFFFF2020DUMP!|r") end
             stanceDeltaText:SetText(string.format("|cFFFF2020-%d|r", loss))
