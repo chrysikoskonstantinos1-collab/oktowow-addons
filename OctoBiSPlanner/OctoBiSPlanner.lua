@@ -268,13 +268,37 @@ local function IndexAtlasLootData()
 
     local function ParseEntry(v, sourceName)
         if type(v) ~= "table" then return end
+
+        -- If nested array: v[1] is a table, recursively parse (handles sets and crafting tables)
+        if type(v[1]) == "table" then
+            for _, subEntry in ipairs(v) do
+                ParseEntry(subEntry, sourceName)
+            end
+            return
+        end
+
         local itemID = v[1]
         if type(itemID) ~= "number" or itemID <= 0 then return end
         if seenItems[itemID] then return end
 
-        local rawName = (type(v[3]) == "string" and v[3]) or ""
-        local rawDesc = (type(v[4]) == "string" and v[4]) or ""
-        local icon = (type(v[2]) == "string" and v[2]) or "INV_Misc_QuestionMark"
+        local rawDesc = ""
+        local rawName = ""
+        local icon = "INV_Misc_QuestionMark"
+
+        -- Support both 5-tuple {id, icon, name, desc, rate} and 2-tuple {id, desc}
+        if type(v[4]) == "string" and string.find(v[4], "#") then
+            rawDesc = v[4]
+            rawName = (type(v[3]) == "string" and v[3]) or ""
+            icon = (type(v[2]) == "string" and v[2]) or icon
+        elseif type(v[2]) == "string" and string.find(v[2], "#") then
+            rawDesc = v[2]
+            rawName = (type(v[3]) == "string" and v[3]) or ""
+            icon = (type(v[4]) == "string" and v[4]) or icon
+        else
+            rawDesc = (type(v[4]) == "string" and v[4]) or (type(v[2]) == "string" and v[2]) or ""
+            rawName = (type(v[3]) == "string" and v[3]) or ""
+            icon = (type(v[2]) == "string" and not string.find(v[2], "#") and v[2]) or icon
+        end
 
         -- Extract Quality
         local _, _, qStr = string.find(rawName, "=q(%d)=")
@@ -282,12 +306,29 @@ local function IndexAtlasLootData()
         local cleanName = string.gsub(rawName, "=q%d=", "")
         cleanName = string.gsub(cleanName, "=ds=", "")
 
+        -- Query GetItemInfo for missing details or fallback
+        local gName, gLink, gQuality, gLevel, gMinLevel, gClass, gSubClass, _, gEquipLoc, gTexture = GetItemInfo(itemID)
+        if cleanName == "" or cleanName == " " then
+            if gName and gName ~= "" then
+                cleanName = gName
+                quality = gQuality or quality
+            else
+                cleanName = "Item #" .. itemID
+            end
+        end
+
+        if (not icon or icon == "INV_Misc_QuestionMark" or icon == "") and gTexture then
+            icon = gTexture
+        end
+
         -- Extract Armor Type
         local armorType = nil
         if string.find(rawDesc, "#a4#") then armorType = "Plate"
         elseif string.find(rawDesc, "#a3#") then armorType = "Mail"
         elseif string.find(rawDesc, "#a2#") then armorType = "Leather"
         elseif string.find(rawDesc, "#a1#") then armorType = "Cloth"
+        elseif gSubClass and (gSubClass == "Plate" or gSubClass == "Mail" or gSubClass == "Leather" or gSubClass == "Cloth") then
+            armorType = gSubClass
         end
 
         -- Extract Weapon Type
@@ -300,13 +341,52 @@ local function IndexAtlasLootData()
         elseif string.find(rawDesc, "#w8#") then weaponType = "Shield"
         elseif string.find(rawDesc, "#w9#") then weaponType = "Staff"
         elseif string.find(rawDesc, "#w13#") then weaponType = "Fist"
-        elseif string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#") then weaponType = "Ranged"
+        elseif string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#") then
+            weaponType = "Ranged"
         end
 
         local fullIcon = icon
         if not string.find(fullIcon, "\\") then
             fullIcon = "Interface\\Icons\\" .. fullIcon
         end
+
+        -- Source resolving
+        local sourceKey = sourceName or "AtlasLoot"
+        local sourceInfo = AtlasLoot_TableNames and (AtlasLoot_TableNames[sourceKey] or AtlasLoot_TableNames[string.gsub(sourceKey, "C$", "")])
+        local cleanSource = sourceKey
+        local sourceMinLvl = nil
+        local sourceMaxLvl = nil
+
+        if sourceInfo then
+            local boss = sourceInfo[1] or ""
+            local zone = sourceInfo[3] or sourceInfo[2] or ""
+            boss = string.gsub(boss, "|c%x%x%x%x%x%x%x%x", "")
+            boss = string.gsub(boss, "|r", "")
+            zone = string.gsub(zone, "|c%x%x%x%x%x%x%x%x", "")
+            zone = string.gsub(zone, "|r", "")
+
+            local _, _, minL, maxL = string.find(zone, "%[(%d+)%-(%d+)%]")
+            if minL and maxL then
+                sourceMinLvl = tonumber(minL)
+                sourceMaxLvl = tonumber(maxL)
+            elseif string.find(zone, "%[RAID%]") then
+                sourceMinLvl = 60
+                sourceMaxLvl = 60
+            end
+
+            if boss ~= "" and zone ~= "" then
+                cleanSource = zone .. " (" .. boss .. ")"
+            elseif boss ~= "" then
+                cleanSource = boss
+            elseif zone ~= "" then
+                cleanSource = zone
+            end
+        elseif AtlasLoot_Data and AtlasLoot_Data["AtlasLootSources"] and AtlasLoot_Data["AtlasLootSources"][itemID] then
+            cleanSource = AtlasLoot_Data["AtlasLootSources"][itemID]
+        end
+
+        local itemReqLevel = (gMinLevel and gMinLevel > 0 and gMinLevel) or sourceMinLvl or 0
+        local itemLvl = gLevel or (itemReqLevel > 0 and (itemReqLevel + 5)) or 0
 
         local itemObj = {
             id = itemID,
@@ -316,35 +396,39 @@ local function IndexAtlasLootData()
             desc = rawDesc,
             armorType = armorType,
             weaponType = weaponType,
-            source = sourceName or "AtlasLoot",
+            source = cleanSource,
+            sourceMinLvl = sourceMinLvl,
+            sourceMaxLvl = sourceMaxLvl,
+            reqLevel = itemReqLevel,
+            itemLevel = itemLvl,
         }
 
         seenItems[itemID] = true
 
         -- Map to slots
-        if string.find(rawDesc, "#s1#") then table.insert(ItemDatabase.HEAD, itemObj) end
-        if string.find(rawDesc, "#s2#") then table.insert(ItemDatabase.NECK, itemObj) end
-        if string.find(rawDesc, "#s3#") then table.insert(ItemDatabase.SHOULDER, itemObj) end
-        if string.find(rawDesc, "#s4#") then table.insert(ItemDatabase.BACK, itemObj) end
-        if string.find(rawDesc, "#s5#") then table.insert(ItemDatabase.CHEST, itemObj) end
-        if string.find(rawDesc, "#s6#") then table.insert(ItemDatabase.SHIRT, itemObj) end
-        if string.find(rawDesc, "#s7#") then table.insert(ItemDatabase.TABARD, itemObj) end
-        if string.find(rawDesc, "#s8#") then table.insert(ItemDatabase.WRIST, itemObj) end
-        if string.find(rawDesc, "#s9#") then table.insert(ItemDatabase.HANDS, itemObj) end
-        if string.find(rawDesc, "#s10#") then table.insert(ItemDatabase.WAIST, itemObj) end
-        if string.find(rawDesc, "#s11#") then table.insert(ItemDatabase.LEGS, itemObj) end
-        if string.find(rawDesc, "#s12#") then table.insert(ItemDatabase.FEET, itemObj) end
-        if string.find(rawDesc, "#s13#") then table.insert(ItemDatabase.FINGER, itemObj) end
-        if string.find(rawDesc, "#s14#") then table.insert(ItemDatabase.TRINKET, itemObj) end
+        if string.find(rawDesc, "#s1#") or gEquipLoc == "INVTYPE_HEAD" then table.insert(ItemDatabase.HEAD, itemObj) end
+        if string.find(rawDesc, "#s2#") or gEquipLoc == "INVTYPE_NECK" then table.insert(ItemDatabase.NECK, itemObj) end
+        if string.find(rawDesc, "#s3#") or gEquipLoc == "INVTYPE_SHOULDER" then table.insert(ItemDatabase.SHOULDER, itemObj) end
+        if string.find(rawDesc, "#s4#") or gEquipLoc == "INVTYPE_CLOAK" then table.insert(ItemDatabase.BACK, itemObj) end
+        if string.find(rawDesc, "#s5#") or gEquipLoc == "INVTYPE_CHEST" or gEquipLoc == "INVTYPE_ROBE" then table.insert(ItemDatabase.CHEST, itemObj) end
+        if string.find(rawDesc, "#s6#") or gEquipLoc == "INVTYPE_BODY" then table.insert(ItemDatabase.SHIRT, itemObj) end
+        if string.find(rawDesc, "#s7#") or gEquipLoc == "INVTYPE_TABARD" then table.insert(ItemDatabase.TABARD, itemObj) end
+        if string.find(rawDesc, "#s8#") or gEquipLoc == "INVTYPE_WRIST" then table.insert(ItemDatabase.WRIST, itemObj) end
+        if string.find(rawDesc, "#s9#") or gEquipLoc == "INVTYPE_HAND" then table.insert(ItemDatabase.HANDS, itemObj) end
+        if string.find(rawDesc, "#s10#") or gEquipLoc == "INVTYPE_WAIST" then table.insert(ItemDatabase.WAIST, itemObj) end
+        if string.find(rawDesc, "#s11#") or gEquipLoc == "INVTYPE_LEGS" then table.insert(ItemDatabase.LEGS, itemObj) end
+        if string.find(rawDesc, "#s12#") or gEquipLoc == "INVTYPE_FEET" then table.insert(ItemDatabase.FEET, itemObj) end
+        if string.find(rawDesc, "#s13#") or gEquipLoc == "INVTYPE_FINGER" then table.insert(ItemDatabase.FINGER, itemObj) end
+        if string.find(rawDesc, "#s14#") or gEquipLoc == "INVTYPE_TRINKET" then table.insert(ItemDatabase.TRINKET, itemObj) end
 
         -- Weapons & Off-hands & Ranged
-        if string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h2#") or string.find(rawDesc, "#h3#") then
+        if string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h2#") or string.find(rawDesc, "#h3#") or gEquipLoc == "INVTYPE_WEAPON" or gEquipLoc == "INVTYPE_2HWEAPON" or gEquipLoc == "INVTYPE_WEAPONMAINHAND" then
             table.insert(ItemDatabase.MAINHAND, itemObj)
         end
-        if string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h4#") or string.find(rawDesc, "#w8#") or string.find(rawDesc, "#s15#") then
+        if string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h4#") or string.find(rawDesc, "#w8#") or string.find(rawDesc, "#s15#") or gEquipLoc == "INVTYPE_WEAPON" or gEquipLoc == "INVTYPE_WEAPONOFFHAND" or gEquipLoc == "INVTYPE_SHIELD" or gEquipLoc == "INVTYPE_HOLDABLE" then
             table.insert(ItemDatabase.OFFHAND, itemObj)
         end
-        if string.find(rawDesc, "#s16#") or string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#") then
+        if string.find(rawDesc, "#s16#") or string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#") or gEquipLoc == "INVTYPE_RANGED" or gEquipLoc == "INVTYPE_RANGEDRIGHT" or gEquipLoc == "INVTYPE_THROWN" or gEquipLoc == "INVTYPE_RELIC" then
             table.insert(ItemDatabase.RANGED, itemObj)
         end
     end
@@ -382,11 +466,117 @@ local SlotButtons = {}
 local StatLabels = {}
 local BrowserRows = {}
 local FilterArmor = "ALL"
+local FilterLevel = "40+"
+local SortMode = "LVL_ASC"
 local FilterSearchText = ""
 local CurrentBrowserItems = {}
 local BrowserPage = 1
 local ROWS_PER_PAGE = 7
 local enchMenuFrame = nil
+
+local ArmorButtons = {}
+local LevelButtons = {}
+local SortButtonRef = nil
+
+local function GetEffectiveLevel(item)
+    if not item then return 0 end
+    if item.reqLevel and item.reqLevel > 0 then
+        return item.reqLevel
+    end
+    local gName, _, gQual, gLevel, gMinLevel = GetItemInfo(item.id)
+    if gMinLevel and gMinLevel > 0 then
+        item.reqLevel = gMinLevel
+        item.itemLevel = gLevel or gMinLevel
+        return gMinLevel
+    end
+    if scanner then
+        scanner:ClearLines()
+        scanner:SetHyperlink("item:" .. item.id .. ":0:0:0")
+        for i = 1, 10 do
+            local line = _G["OctoBiSScannerTooltipTextLeft" .. i]
+            if line and line:IsShown() then
+                local txt = line:GetText()
+                if txt then
+                    local _, _, r = string.find(txt, "Requires Level (%d+)")
+                    if r then
+                        local rNum = tonumber(r)
+                        item.reqLevel = rNum
+                        return rNum
+                    end
+                end
+            end
+        end
+    end
+    if item.sourceMinLvl and item.sourceMinLvl > 0 then
+        return item.sourceMinLvl
+    end
+    if item.itemLevel and item.itemLevel > 0 then
+        return math.max(1, item.itemLevel - 5)
+    end
+    if gLevel and gLevel > 0 then
+        item.itemLevel = gLevel
+        return math.max(1, gLevel - 5)
+    end
+    return 0
+end
+
+local function MatchesLevelFilter(effLvl, item, filter)
+    if filter == "ALL" then return true end
+    if filter == "40+" then
+        if effLvl >= 40 then return true end
+        if item.itemLevel and item.itemLevel >= 43 then return true end
+        if item.sourceMinLvl and item.sourceMinLvl >= 38 then return true end
+        return false
+    elseif filter == "40-49" then
+        if effLvl >= 40 and effLvl <= 49 then return true end
+        if (effLvl == 0 or effLvl < 40) and item.sourceMinLvl and item.sourceMinLvl >= 38 and item.sourceMinLvl <= 49 then return true end
+        return false
+    elseif filter == "50-59" then
+        if effLvl >= 50 and effLvl <= 59 then return true end
+        if (effLvl == 0 or effLvl < 50) and item.sourceMinLvl and item.sourceMinLvl >= 50 and item.sourceMinLvl <= 59 then return true end
+        return false
+    elseif filter == "60" then
+        if effLvl >= 60 then return true end
+        if item.sourceMinLvl and item.sourceMinLvl >= 60 then return true end
+        if item.itemLevel and item.itemLevel >= 65 then return true end
+        return false
+    end
+    return true
+end
+
+local function UpdateFilterButtons()
+    for name, btn in pairs(ArmorButtons) do
+        if name == FilterArmor then
+            btn:SetBackdropColor(0.18, 0.45, 0.75, 0.95)
+            btn:SetBackdropBorderColor(0.4, 0.8, 1.0, 1.0)
+            btn.text:SetText("|cFFFFD100" .. name .. "|r")
+        else
+            btn:SetBackdropColor(0.1, 0.1, 0.14, 0.8)
+            btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.6)
+            btn.text:SetText("|cFF888888" .. name .. "|r")
+        end
+    end
+    for name, btn in pairs(LevelButtons) do
+        if name == FilterLevel then
+            btn:SetBackdropColor(0.18, 0.45, 0.75, 0.95)
+            btn:SetBackdropBorderColor(0.4, 0.8, 1.0, 1.0)
+            btn.text:SetText("|cFFFFD100" .. name .. "|r")
+        else
+            btn:SetBackdropColor(0.1, 0.1, 0.14, 0.8)
+            btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.6)
+            btn.text:SetText("|cFF888888" .. name .. "|r")
+        end
+    end
+    if SortButtonRef and SortButtonRef.text then
+        if SortMode == "LVL_ASC" then
+            SortButtonRef.text:SetText("|cFFFFD100Sort: Lvl ▲|r")
+        elseif SortMode == "LVL_DESC" then
+            SortButtonRef.text:SetText("|cFFFFD100Sort: Lvl ▼|r")
+        else
+            SortButtonRef.text:SetText("|cFFFFD100Sort: Qual|r")
+        end
+    end
+end
 
 local function UpdateStatSummary()
     local total = {
@@ -495,21 +685,42 @@ local function UpdateBrowserList()
         local matchArmor = (FilterArmor == "ALL") or (it.armorType == FilterArmor) or (it.weaponType == FilterArmor)
         local matchText = (searchLower == "") or (string.find(string.lower(it.name or ""), searchLower, 1, true) ~= nil)
 
-        if matchArmor and matchText then
+        local effLvl = GetEffectiveLevel(it)
+        local matchLevel = MatchesLevelFilter(effLvl, it, FilterLevel)
+
+        if matchArmor and matchText and matchLevel then
             table.insert(CurrentBrowserItems, it)
         end
     end
 
-    -- Sort by quality (Epic first), then by name
+    -- Sort according to SortMode
     table.sort(CurrentBrowserItems, function(a, b)
+        local effA = GetEffectiveLevel(a)
+        local effB = GetEffectiveLevel(b)
         local qa = (a and a.quality) or 0
         local qb = (b and b.quality) or 0
-        if qa ~= qb then
-            return qa > qb
-        end
         local na = (a and a.name) or ""
         local nb = (b and b.name) or ""
-        return na < nb
+
+        if SortMode == "LVL_ASC" then
+            if effA ~= effB then
+                if effA == 0 then return false end
+                if effB == 0 then return true end
+                return effA < effB
+            end
+            if qa ~= qb then return qa > qb end
+            return na < nb
+        elseif SortMode == "LVL_DESC" then
+            if effA ~= effB then
+                return effA > effB
+            end
+            if qa ~= qb then return qa > qb end
+            return na < nb
+        else -- "QUAL"
+            if qa ~= qb then return qa > qb end
+            if effA ~= effB then return effA > effB end
+            return na < nb
+        end
     end)
 
     local total = table.getn(CurrentBrowserItems)
@@ -527,9 +738,34 @@ local function UpdateBrowserList()
             row.item = item
             row.icon:SetTexture(item.icon)
             local qc = QUALITY_COLORS[item.quality] or QUALITY_COLORS[1]
-            row.name:SetText(item.name)
+
+            -- Lazy cache update from GetItemInfo if item was generic
+            if string.find(item.name, "^Item #") then
+                local gName, _, gQual, gLvl, gMinLvl, _, _, _, _, gTex = GetItemInfo(item.id)
+                if gName then
+                    item.name = gName
+                    item.quality = gQual or item.quality
+                    qc = QUALITY_COLORS[item.quality] or qc
+                    if gMinLvl and gMinLvl > 0 then item.reqLevel = gMinLvl end
+                    if gLvl and gLvl > 0 then item.itemLevel = gLvl end
+                    if gTex then item.icon = gTex; row.icon:SetTexture(gTex) end
+                end
+            end
+
+            local effLvl = GetEffectiveLevel(item)
+            local lvlText = ""
+            if item.reqLevel and item.reqLevel > 0 then
+                lvlText = string.format(" |cFFFFD100[Req %d]|r", item.reqLevel)
+            elseif item.itemLevel and item.itemLevel > 0 then
+                lvlText = string.format(" |cFF88BBFF[iLvl %d]|r", item.itemLevel)
+            elseif effLvl > 0 then
+                lvlText = string.format(" |cFFFFD100[Req %d]|r", effLvl)
+            end
+
+            row.name:SetText(item.name .. lvlText)
             row.name:SetTextColor(qc[1], qc[2], qc[3])
-            row.sub:SetText(string.format("|cFF888888%s - %s|r", item.armorType or item.weaponType or "Item", item.source))
+            local typeStr = item.armorType or item.weaponType or "Item"
+            row.sub:SetText(string.format("|cFF999999%s • %s|r", typeStr, item.source))
             row:SetBackdropBorderColor(qc[1], qc[2], qc[3], 0.7)
             row:Show()
         else
@@ -537,6 +773,8 @@ local function UpdateBrowserList()
             row:Hide()
         end
     end
+
+    UpdateFilterButtons()
 end
 
 local function OpenSlotBrowser(slot)
@@ -585,7 +823,7 @@ local function BuildUI()
     if Planner.isBuilt then return end
 
     Planner:SetWidth(580)
-    Planner:SetHeight(380)
+    Planner:SetHeight(396)
     Planner:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     Planner:SetFrameStrata("HIGH")
     Planner:SetToplevel(true)
@@ -635,7 +873,7 @@ local function BuildUI()
     -- ------------------------------------------------------------------------
     local dollFrame = CreateFrame("Frame", "OctoBiSDollFrame", Planner)
     dollFrame:SetWidth(116)
-    dollFrame:SetHeight(332)
+    dollFrame:SetHeight(346)
     dollFrame:SetPoint("TOPLEFT", Planner, "TOPLEFT", 10, -36)
 
     for _, slot in ipairs(SLOTS) do
@@ -755,7 +993,7 @@ local function BuildUI()
     -- ------------------------------------------------------------------------
     local browser = CreateFrame("Frame", "OctoBiSBrowserFrame", Planner)
     browser:SetWidth(292)
-    browser:SetHeight(332)
+    browser:SetHeight(346)
     browser:SetPoint("TOPLEFT", dollFrame, "TOPRIGHT", 6, 0)
     browser:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -773,7 +1011,7 @@ local function BuildUI()
 
     -- Search Box
     local searchBox = CreateFrame("EditBox", "OctoBiSSearchEdit", browser, "InputBoxTemplate")
-    searchBox:SetWidth(110)
+    searchBox:SetWidth(100)
     searchBox:SetHeight(18)
     searchBox:SetPoint("TOPRIGHT", browser, "TOPRIGHT", -8, -5)
     searchBox:SetAutoFocus(false)
@@ -788,35 +1026,119 @@ local function BuildUI()
     searchLabel:SetPoint("RIGHT", searchBox, "LEFT", -4, 0)
     searchLabel:SetText("Search:")
 
-    -- Filter Tabs (All, Plate, Leather, etc.)
-    local armorFilters = { "ALL", "Plate", "Mail", "Leather", "Cloth" }
-    for i, aName in ipairs(armorFilters) do
+    -- Filter Tabs (Line 2: Armor: ALL, Plate, Mail, Leather, Cloth)
+    local armorFilters = {
+        { name = "ALL", width = 32 },
+        { name = "Plate", width = 40 },
+        { name = "Mail", width = 36 },
+        { name = "Leather", width = 46 },
+        { name = "Cloth", width = 38 },
+    }
+    local curX = 8
+    for _, af in ipairs(armorFilters) do
         local fBtn = CreateFrame("Button", nil, browser)
-        fBtn:SetWidth(38)
+        fBtn:SetWidth(af.width)
         fBtn:SetHeight(16)
-        fBtn:SetPoint("TOPLEFT", browser, "TOPLEFT", 8 + ((i - 1) * 41), -25)
+        fBtn:SetPoint("TOPLEFT", browser, "TOPLEFT", curX, -25)
+        curX = curX + af.width + 3
         fBtn:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
             edgeSize = 8, insets = { left = 1, right = 1, top = 1, bottom = 1 }
         })
-        fBtn:SetBackdropColor(0.2, 0.2, 0.2, 0.8)
+        fBtn:SetBackdropColor(0.1, 0.1, 0.14, 0.8)
         local txt = fBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         txt:SetPoint("CENTER", fBtn, "CENTER", 0, 0)
-        txt:SetText(aName)
+        txt:SetText(af.name)
+        fBtn.text = txt
+        local aName = af.name
         fBtn:SetScript("OnClick", function()
             FilterArmor = aName
             BrowserPage = 1
             UpdateBrowserList()
         end)
+        ArmorButtons[aName] = fBtn
     end
+
+    -- Level Filter Tabs (Line 3: ALL, 40+, 40-49, 50-59, 60)
+    local levelFilters = {
+        { name = "ALL", width = 28 },
+        { name = "40+", width = 30 },
+        { name = "40-49", width = 38 },
+        { name = "50-59", width = 38 },
+        { name = "60", width = 26 },
+    }
+    curX = 8
+    for _, lf in ipairs(levelFilters) do
+        local lBtn = CreateFrame("Button", nil, browser)
+        lBtn:SetWidth(lf.width)
+        lBtn:SetHeight(16)
+        lBtn:SetPoint("TOPLEFT", browser, "TOPLEFT", curX, -44)
+        curX = curX + lf.width + 3
+        lBtn:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 8, insets = { left = 1, right = 1, top = 1, bottom = 1 }
+        })
+        lBtn:SetBackdropColor(0.1, 0.1, 0.14, 0.8)
+        local txt = lBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        txt:SetPoint("CENTER", lBtn, "CENTER", 0, 0)
+        txt:SetText(lf.name)
+        lBtn.text = txt
+        local lvlName = lf.name
+        lBtn:SetScript("OnClick", function()
+            FilterLevel = lvlName
+            BrowserPage = 1
+            UpdateBrowserList()
+        end)
+        LevelButtons[lvlName] = lBtn
+    end
+
+    -- Sort Toggle Button (Line 3 Right)
+    local sortBtn = CreateFrame("Button", nil, browser)
+    sortBtn:SetWidth(84)
+    sortBtn:SetHeight(16)
+    sortBtn:SetPoint("TOPRIGHT", browser, "TOPRIGHT", -8, -44)
+    sortBtn:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8, insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    sortBtn:SetBackdropColor(0.12, 0.16, 0.22, 0.9)
+    sortBtn:SetBackdropBorderColor(0.3, 0.5, 0.7, 0.8)
+    local sTxt = sortBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    sTxt:SetPoint("CENTER", sortBtn, "CENTER", 0, 0)
+    sTxt:SetText("|cFFFFD100Sort: Lvl ▲|r")
+    sortBtn.text = sTxt
+    sortBtn:SetScript("OnClick", function()
+        if SortMode == "LVL_ASC" then
+            SortMode = "LVL_DESC"
+        elseif SortMode == "LVL_DESC" then
+            SortMode = "QUAL"
+        else
+            SortMode = "LVL_ASC"
+        end
+        BrowserPage = 1
+        UpdateBrowserList()
+    end)
+    sortBtn:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Sort Order")
+        GameTooltip:AddLine("Click to cycle between:", 1, 1, 1)
+        GameTooltip:AddLine("• |cFFFFD100Sort: Lvl ▲|r (Level ascending - level 40 first)", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("• |cFFFFD100Sort: Lvl ▼|r (Level descending - level 60 first)", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("• |cFFFFD100Sort: Qual|r (Quality - Epics first)", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    sortBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    SortButtonRef = sortBtn
 
     -- Browser Rows (7 rows)
     for i = 1, ROWS_PER_PAGE do
         local row = CreateFrame("Button", "OctoBiSRow_" .. i, browser)
         row:SetWidth(276)
         row:SetHeight(32)
-        row:SetPoint("TOPLEFT", browser, "TOPLEFT", 8, -45 - ((i - 1) * 35))
+        row:SetPoint("TOPLEFT", browser, "TOPLEFT", 8, -64 - ((i - 1) * 35))
         row:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -893,7 +1215,7 @@ local function BuildUI()
     -- ------------------------------------------------------------------------
     local statPanel = CreateFrame("Frame", "OctoBiSStatPanel", Planner)
     statPanel:SetWidth(136)
-    statPanel:SetHeight(332)
+    statPanel:SetHeight(346)
     statPanel:SetPoint("TOPLEFT", browser, "TOPRIGHT", 6, 0)
     statPanel:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
