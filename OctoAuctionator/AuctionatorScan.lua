@@ -2026,24 +2026,15 @@ function Atr_FullScanFrameIdle()
 		Atr_UpdateScanMiniBar();
 	end
 
-	-- Anti-Disconnect / Anti-AFK Keepalive: prevents server AFK and client idle timeout during scan or paused scan
-	if (gAtr_FullScanState == ATR_FS_STARTED or gAtr_FullScanState == ATR_FS_PAUSED) then
-		if (now - gFS_lastKeepAlive > 15) then
+	-- Anti-Disconnect Keepalive: prevents client idle timeout ONLY while a Full Scan is actively running
+	if (gAtr_FullScanState == ATR_FS_STARTED) then
+		if (now - (gFS_lastKeepAlive or 0) > 30) then
 			gFS_lastKeepAlive = now;
-			-- Cancel any client-side camping or logout countdown
 			if (CancelLogout) then
 				CancelLogout();
 			end
 			if (StaticPopup_Hide) then
 				StaticPopup_Hide("CAMP");
-			end
-			-- Clear AFK flag if set
-			if (UnitIsAFK and UnitIsAFK("player")) then
-				if (SlashCmdList and SlashCmdList["AFK"]) then
-					SlashCmdList["AFK"]("");
-				elseif (SendChatMessage) then
-					SendChatMessage("", "AFK");
-				end
 			end
 		end
 	end
@@ -2079,32 +2070,3 @@ function Atr_FullScanFrameIdle()
 	end
 
 end
-
-
------------------------------------------
--- Event Listener: Abort Idle Camping Logout while a Scan is in Progress
------------------------------------------
-local atrCampingKeeper = CreateFrame("Frame", "AtrScanCampingKeeper");
-atrCampingKeeper:RegisterEvent("PLAYER_CAMPING");
-atrCampingKeeper:SetScript("OnEvent", function()
-	if (event == "PLAYER_CAMPING") then
-		-- Do NOT cancel intentional logout initiated when scan completes!
-		if (Atr_IsAutoLogoutActive and Atr_IsAutoLogoutActive()) then
-			return;
-		end
-
-		local scanActive = (gAtr_FullScanState == ATR_FS_STARTED) or (gAtr_FullScanState == ATR_FS_PAUSED) or (Atr_IsFastScanRunning and Atr_IsFastScanRunning());
-		local ahActive = (AuctionFrame and AuctionFrame:IsShown()) or (Atr_ProfitFrame and Atr_ProfitFrame:IsShown()) or (Atr_FullScanFrame and Atr_FullScanFrame:IsShown());
-		if (scanActive or ahActive) then
-			if (CancelLogout) then
-				CancelLogout();
-			end
-			if (StaticPopup_Hide) then
-				StaticPopup_Hide("CAMP");
-			end
-			if (DEFAULT_CHAT_FRAME) then
-				DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Auctionator]|r Prevented idle timeout during scan / AH session.");
-			end
-		end
-	end
-end);
