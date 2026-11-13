@@ -6853,43 +6853,47 @@ local function InitWarriorCombatHUD()
             revIcon:Hide()
         end
 
-        -- 4c. Demoralizing Shout (target debuff / missing alert in combat)
+        -- 4c. Demoralizing Shout (target debuff / reminder in combat)
         local demoName, _, _, demoRem = ScanAura("target", "Demoralizing Shout", "HARMFUL")
         if demoName then
             demoIcon:Show()
             demoIcon.icon:SetAlpha(1.0)
+            demoIcon.icon:SetVertexColor(1.0, 1.0, 1.0)
             demoIcon.icon:Show()
             demoIcon:SetBackdropBorderColor(0.2, 0.75, 0.95, 0.85) -- Cyan debuff border
             demoIcon.timerText:SetText(demoRem > 0 and string.format("%d", math.ceil(demoRem)) or "")
             demoIcon.stackText:SetText("")
         elseif UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") and UnitAffectingCombat("player") then
-            -- Missing alert in combat!
+            -- Missing reminder in combat: Dimmed yellow light reminder (no red !)
             demoIcon:Show()
-            demoIcon.icon:SetAlpha(0.65)
+            demoIcon.icon:SetAlpha(0.35)
+            demoIcon.icon:SetVertexColor(0.65, 0.65, 0.65)
             demoIcon.icon:Show()
-            demoIcon:SetBackdropBorderColor(1, 0.2, 0.2, 0.9) -- Red warning border
-            demoIcon.timerText:SetText("|cffff2020!|r")
+            demoIcon:SetBackdropBorderColor(0.85, 0.70, 0.20, 0.55) -- Dimmed yellow ambient light
+            demoIcon.timerText:SetText("")
             demoIcon.stackText:SetText("")
         else
             demoIcon:Hide()
         end
 
-        -- 4d. Thunder Clap (target debuff / missing alert in combat)
+        -- 4d. Thunder Clap (target debuff / reminder in combat)
         local tcName, _, _, tcRem = ScanAura("target", "Thunder Clap", "HARMFUL")
         if tcName then
             tcIcon:Show()
             tcIcon.icon:SetAlpha(1.0)
+            tcIcon.icon:SetVertexColor(1.0, 1.0, 1.0)
             tcIcon.icon:Show()
             tcIcon:SetBackdropBorderColor(0.3, 0.55, 1.0, 0.85) -- Electric blue border
             tcIcon.timerText:SetText(tcRem > 0 and string.format("%d", math.ceil(tcRem)) or "")
             tcIcon.stackText:SetText("")
         elseif UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") and UnitAffectingCombat("player") then
-            -- Missing alert in combat!
+            -- Missing reminder in combat: Dimmed yellow light reminder (no red !)
             tcIcon:Show()
-            tcIcon.icon:SetAlpha(0.65)
+            tcIcon.icon:SetAlpha(0.35)
+            tcIcon.icon:SetVertexColor(0.65, 0.65, 0.65)
             tcIcon.icon:Show()
-            tcIcon:SetBackdropBorderColor(1, 0.45, 0.1, 0.9) -- Orange/red warning border
-            tcIcon.timerText:SetText("|cffff8020!|r")
+            tcIcon:SetBackdropBorderColor(0.85, 0.70, 0.20, 0.55) -- Dimmed yellow ambient light
+            tcIcon.timerText:SetText("")
             tcIcon.stackText:SetText("")
         else
             tcIcon:Hide()
@@ -6899,6 +6903,7 @@ local function InitWarriorCombatHUD()
         local bsName, _, bsDur, bsRem = ScanAura("player", "Battle Shout", "HELPFUL")
         if bsName then
             bsIcon.icon:SetAlpha(1.0)
+            bsIcon.icon:SetVertexColor(1.0, 1.0, 1.0)
             bsIcon:SetBackdropBorderColor(0.2, 0.6, 1.0, 0.8)
             if bsRem > 60 then
                 bsIcon.timerText:SetText(string.format("%dm", math.floor(bsRem / 60)))
@@ -6908,10 +6913,11 @@ local function InitWarriorCombatHUD()
                 bsIcon.timerText:SetText("")
             end
         else
-            -- Battle Shout MISSING alert: red pulsing border!
-            bsIcon.icon:SetAlpha(0.8)
-            bsIcon:SetBackdropBorderColor(1, 0.1, 0.1, 1)
-            bsIcon.timerText:SetText("|cffff2020!|r")
+            -- Battle Shout MISSING reminder: Dimmed with soft yellow light (no red !)
+            bsIcon.icon:SetAlpha(0.35)
+            bsIcon.icon:SetVertexColor(0.65, 0.65, 0.65)
+            bsIcon:SetBackdropBorderColor(0.85, 0.70, 0.20, 0.55) -- Dimmed yellow ambient light
+            bsIcon.timerText:SetText("")
         end
 
         -- 5b. Shield Block / Shield Slam Buff Indicator
@@ -6983,7 +6989,7 @@ local function InitWarriorCombatHUD()
             sbBuffIcon:Show()
             sbBuffIcon.icon:SetAlpha(0.22)
             sbBuffIcon.icon:SetVertexColor(0.40, 0.40, 0.45)
-            sbBuffIcon:SetBackdropBorderColor(0.35, 0.55, 0.75, 0.40) -- Soft ambient light border
+            sbBuffIcon:SetBackdropBorderColor(0.85, 0.70, 0.20, 0.55) -- Dimmed yellow ambient light
             sbBuffIcon.timerText:SetText("")
             sbBuffIcon.stackText:SetText("")
         else
