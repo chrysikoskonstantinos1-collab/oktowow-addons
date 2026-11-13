@@ -1749,10 +1749,24 @@ local function BuildUI()
         rSub:SetText("")
         row.sub = rSub
 
+        row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         row:SetScript("OnClick", function()
-            if this.item and ActiveSlot then
-                EquippedGear[ActiveSlot.name] = this.item
-                RefreshSlotDisplay(ActiveSlot.name)
+            if not this.item then return end
+            if arg1 == "RightButton" or IsControlKeyDown() then
+                -- Right-Click or Ctrl-Click: Preview 3D appearance without altering equipped gear
+                if OctoBiSDressModel and Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
+                    OctoBiSDressModel:TryOn("item:" .. this.item.id .. ":0:0:0")
+                end
+            else
+                -- Left-Click: Equip item in planner slot, update stats, and update 3D model
+                if ActiveSlot then
+                    EquippedGear[ActiveSlot.name] = this.item
+                    RefreshSlotDisplay(ActiveSlot.name)
+                    UpdateStatsDisplay()
+                    if OctoBiSDressModel and Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
+                        OctoBiSDressModel:TryOn("item:" .. this.item.id .. ":0:0:0")
+                    end
+                end
             end
         end)
 
@@ -1761,27 +1775,15 @@ local function BuildUI()
             if this.item then
                 GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
                 GameTooltip:SetHyperlink("item:" .. this.item.id .. ":0:0:0")
-                GameTooltip:Show()
-
-                -- Live 3D Dressing Room preview on hover
-                if OctoBiSDressModel and Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
-                    OctoBiSDressModel:TryOn("item:" .. this.item.id .. ":0:0:0")
+                if Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
+                    GameTooltip:AddLine("<Left-Click: Equip | Right-Click: Preview 3D>", 0.2, 0.9, 1.0)
                 end
+                GameTooltip:Show()
             end
         end)
         row:SetScript("OnLeave", function()
             this:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
             GameTooltip:Hide()
-
-            -- Restore equipped items on mouse leave if item was not equipped
-            if ActiveSlot and OctoBiSDressModel and Planner and Planner.dressingFrame and Planner.dressingFrame:IsShown() then
-                local eq = EquippedGear[ActiveSlot.name]
-                if eq and eq.id then
-                    OctoBiSDressModel:TryOn("item:" .. eq.id .. ":0:0:0")
-                else
-                    UpdateDressingRoom()
-                end
-            end
         end)
 
         row:Hide()
