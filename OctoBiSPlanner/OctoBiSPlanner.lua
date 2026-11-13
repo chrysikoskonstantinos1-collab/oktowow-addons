@@ -165,17 +165,29 @@ local EquippedGear = {}
 local EquippedEnchants = {}
 local ActiveSlot = nil
 local CurrentProfile = "Default"
+local PendingStatUpdate = false
+local ItemStatsCache = {}
 
 -- ----------------------------------------------------------------------------
 -- Tooltip Scanner for Accurate Item Stats
 -- ----------------------------------------------------------------------------
 local scanner = CreateFrame("GameTooltip", "OctoBiSScannerTooltip", UIParent, "GameTooltipTemplate")
-scanner:SetOwner(UIParent, "ANCHOR_NONE")
+scanner:SetOwner(WorldFrame, "ANCHOR_NONE")
 
 local function ScanItemStats(itemID)
     if not itemID or itemID <= 0 then return {} end
+    if ItemStatsCache[itemID] then
+        return ItemStatsCache[itemID]
+    end
+
+    scanner:SetOwner(WorldFrame, "ANCHOR_NONE")
     scanner:ClearLines()
     scanner:SetHyperlink("item:" .. itemID .. ":0:0:0")
+
+    local numLines = scanner:NumLines() or 0
+    if numLines == 0 then
+        return {}
+    end
 
     local stats = {
         str = 0, agi = 0, sta = 0, int = 0, spi = 0, armor = 0,
@@ -184,68 +196,127 @@ local function ScanItemStats(itemID)
         spellDmg = 0, healing = 0, mp5 = 0,
     }
 
-    for i = 1, 30 do
-        local line = _G["OctoBiSScannerTooltipTextLeft" .. i]
-        if line and line:IsShown() then
-            local text = line:GetText()
-            if text then
-                local _, _, v = string.find(text, "(%d+) Strength")
-                if v then stats.str = stats.str + tonumber(v) end
+    local hasAnyStat = false
 
-                _, _, v = string.find(text, "(%d+) Agility")
-                if v then stats.agi = stats.agi + tonumber(v) end
+    for i = 1, numLines do
+        local lineL = _G["OctoBiSScannerTooltipTextLeft" .. i]
+        local lineR = _G["OctoBiSScannerTooltipTextRight" .. i]
+        local pair = { lineL, lineR }
+        for _, line in ipairs(pair) do
+            if line then
+                local text = line:GetText()
+                if text and text ~= "" then
+                    local clean = string.gsub(text, "|c%x%x%x%x%x%x%x%x", "")
+                    clean = string.gsub(clean, "|r", "")
+                    clean = string.gsub(clean, "^%s+", "")
 
-                _, _, v = string.find(text, "(%d+) Stamina")
-                if v then stats.sta = stats.sta + tonumber(v) end
+                    -- 1. All Stats
+                    local _, _, v = string.find(clean, "%+(%d+)%s+[tT]o [aA]ll [sS]tats")
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%s+[aA]ll [sS]tats") end
+                    if v then
+                        local n = tonumber(v) or 0
+                        stats.str = stats.str + n
+                        stats.agi = stats.agi + n
+                        stats.sta = stats.sta + n
+                        stats.int = stats.int + n
+                        stats.spi = stats.spi + n
+                        hasAnyStat = true
+                    end
 
-                _, _, v = string.find(text, "(%d+) Intellect")
-                if v then stats.int = stats.int + tonumber(v) end
+                    -- 2. Primary Attributes
+                    _, _, v = string.find(clean, "(%d+)%s+Strength")
+                    if v then stats.str = stats.str + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "(%d+) Spirit")
-                if v then stats.spi = stats.spi + tonumber(v) end
+                    _, _, v = string.find(clean, "(%d+)%s+Agility")
+                    if v then stats.agi = stats.agi + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "^(%d+) Armor")
-                if v then stats.armor = stats.armor + tonumber(v) end
+                    _, _, v = string.find(clean, "(%d+)%s+Stamina")
+                    if v then stats.sta = stats.sta + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "chance to hit by (%d+)%%")
-                if v then stats.hit = stats.hit + tonumber(v) end
+                    _, _, v = string.find(clean, "(%d+)%s+Intellect")
+                    if v then stats.int = stats.int + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "critical strike by (%d+)%%")
-                if v then stats.crit = stats.crit + tonumber(v) end
+                    _, _, v = string.find(clean, "(%d+)%s+Spirit")
+                    if v then stats.spi = stats.spi + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "%+(%d+) Attack Power")
-                if not v then _, _, v = string.find(text, "attack power by (%d+)") end
-                if v then stats.ap = stats.ap + tonumber(v) end
+                    -- 3. Armor (ignore "increases armor by")
+                    if not string.find(clean, "by %d+ Armor") and not string.find(clean, "armor by") and not string.find(clean, "Armor by") then
+                        _, _, v = string.find(clean, "(%d+)%s+Armor")
+                        if v then stats.armor = stats.armor + tonumber(v); hasAnyStat = true end
+                    end
 
-                _, _, v = string.find(text, "defense by (%d+)")
-                if not v then _, _, v = string.find(text, "%+(%d+) Defense") end
-                if v then stats.defense = stats.defense + tonumber(v) end
+                    -- 4. Attack Power
+                    _, _, v = string.find(clean, "%+(%d+)%s+Attack Power")
+                    if not v then _, _, v = string.find(clean, "[aA]ttack [pP]ower by (%d+)") end
+                    if not v then _, _, v = string.find(clean, "[rR]anged [aA]ttack [pP]ower by (%d+)") end
+                    if v then stats.ap = stats.ap + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "dodge an attack by (%d+)%%")
-                if v then stats.dodge = stats.dodge + tonumber(v) end
+                    -- 5. Hit
+                    _, _, v = string.find(clean, "chance to hit by (%d+)%%")
+                    if not v then _, _, v = string.find(clean, "[hH]it %+(%d+)%%") end
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%%%s+[hH]it") end
+                    if v then stats.hit = stats.hit + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "parry an attack by (%d+)%%")
-                if v then stats.parry = stats.parry + tonumber(v) end
+                    -- 6. Crit
+                    _, _, v = string.find(clean, "critical strike by (%d+)%%")
+                    if not v then _, _, v = string.find(clean, "[cC]rit %+(%d+)%%") end
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%%%s+[cC]rit") end
+                    if v then stats.crit = stats.crit + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "block attacks with a shield by (%d+)%%")
-                if v then stats.block = stats.block + tonumber(v) end
+                    -- 7. Defense
+                    _, _, v = string.find(clean, "defense by (%d+)")
+                    if not v then _, _, v = string.find(clean, "defense rating by (%d+)") end
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%s+Defense") end
+                    if v then stats.defense = stats.defense + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "block value of your shield by (%d+)")
-                if v then stats.blockValue = stats.blockValue + tonumber(v) end
+                    -- 8. Dodge
+                    _, _, v = string.find(clean, "dodge.*by (%d+)%%")
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%%%s+[dD]odge") end
+                    if v then stats.dodge = stats.dodge + tonumber(v); hasAnyStat = true end
 
-                _, _, v = string.find(text, "damage and healing done by magical spells and effects by up to (%d+)")
-                if v then
-                    stats.spellDmg = stats.spellDmg + tonumber(v)
-                    stats.healing = stats.healing + tonumber(v)
+                    -- 9. Parry
+                    _, _, v = string.find(clean, "parry.*by (%d+)%%")
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%%%s+[pP]arry") end
+                    if v then stats.parry = stats.parry + tonumber(v); hasAnyStat = true end
+
+                    -- 10. Block Chance & Value
+                    _, _, v = string.find(clean, "block attacks with a shield by (%d+)%%")
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%%%s+[bB]lock") end
+                    if v then stats.block = stats.block + tonumber(v); hasAnyStat = true end
+
+                    _, _, v = string.find(clean, "block value.*by (%d+)")
+                    if not v then _, _, v = string.find(clean, "(%d+)%s+Block Value") end
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%s+Block Value") end
+                    if v then stats.blockValue = stats.blockValue + tonumber(v); hasAnyStat = true end
+
+                    -- 11. Spell Power / Spell Damage & Healing
+                    _, _, v = string.find(clean, "damage and healing done by magical spells and effects by up to (%d+)")
+                    if not v then _, _, v = string.find(clean, "damage done by magical spells and effects by up to (%d+)") end
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%s+[sS]pell [dD]amage") end
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%s+[sS]pell [pP]ower") end
+                    if v then
+                        local n = tonumber(v) or 0
+                        stats.spellDmg = stats.spellDmg + n
+                        stats.healing = stats.healing + n
+                        hasAnyStat = true
+                    end
+
+                    -- 12. Healing
+                    _, _, v = string.find(clean, "healing done by spells and effects by up to (%d+)")
+                    if not v then _, _, v = string.find(clean, "%+(%d+)%s+[hH]ealing") end
+                    if v then stats.healing = stats.healing + tonumber(v); hasAnyStat = true end
+
+                    -- 13. MP5
+                    _, _, v = string.find(clean, "(%d+)%s+[mM]ana per 5 sec")
+                    if not v then _, _, v = string.find(clean, "Restores (%d+) [mM]ana per 5 sec") end
+                    if v then stats.mp5 = stats.mp5 + tonumber(v); hasAnyStat = true end
                 end
-
-                _, _, v = string.find(text, "healing done by spells and effects by up to (%d+)")
-                if v then stats.healing = stats.healing + tonumber(v) end
-
-                _, _, v = string.find(text, "(%d+) mana per 5 sec")
-                if v then stats.mp5 = stats.mp5 + tonumber(v) end
             end
         end
+    end
+
+    if hasAnyStat then
+        ItemStatsCache[itemID] = stats
     end
     return stats
 end
@@ -278,30 +349,40 @@ local function IndexAtlasLootData()
         end
 
         local itemID = v[1]
+        local isCraftSpell = false
+        if type(itemID) == "string" and string.sub(itemID, 1, 1) == "s" then
+            local spellID = tonumber(string.sub(itemID, 2))
+            if spellID and AtlasLoot_Data and AtlasLoot_Data["Spells"] and AtlasLoot_Data["Spells"][spellID] then
+                itemID = AtlasLoot_Data["Spells"][spellID]["craftItem"]
+                isCraftSpell = true
+            end
+        end
+
         if type(itemID) ~= "number" or itemID <= 0 then return end
         if seenItems[itemID] then return end
 
         local rawDesc = (type(v[4]) == "string" and v[4]) or (type(v[2]) == "string" and v[2]) or ""
-        -- If rawDesc does not contain any slot or weapon tag, it is not equippable gear
-        if not string.find(rawDesc, "#") then return end
 
-        -- Fast slot match check
-        local sHead     = string.find(rawDesc, "#s1#")
+        -- Filter out world object loot containers that contain "Chest" in their name (e.g. Krom Stoutarm's Chest)
+        local isChestObj = string.find(cleanSource, "FamilyChest") or string.find(cleanSource, "KromStoutarmChest") or string.find(cleanSource, "BaelogsChest") or string.find(cleanSource, "Tribute")
+
+        -- Slot match check (AtlasLoot #s tags + crafting table names)
+        local sHead     = string.find(rawDesc, "#s1#") or string.find(cleanSource, "Helm") or string.find(cleanSource, "Head")
         local sNeck     = string.find(rawDesc, "#s2#")
-        local sShoulder = string.find(rawDesc, "#s3#")
-        local sBack     = string.find(rawDesc, "#s4#")
-        local sChest    = string.find(rawDesc, "#s5#")
-        local sShirt    = string.find(rawDesc, "#s6#")
-        local sTabard   = string.find(rawDesc, "#s7#")
-        local sWrist    = string.find(rawDesc, "#s8#")
-        local sHands    = string.find(rawDesc, "#s9#")
-        local sWaist    = string.find(rawDesc, "#s10#")
-        local sLegs     = string.find(rawDesc, "#s11#")
-        local sFeet     = string.find(rawDesc, "#s12#")
-        local sFinger   = string.find(rawDesc, "#s13#")
-        local sTrinket  = string.find(rawDesc, "#s14#")
-        local sMain     = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h2#") or string.find(rawDesc, "#h3#")
-        local sOff      = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h4#") or string.find(rawDesc, "#w8#") or string.find(rawDesc, "#s15#")
+        local sShoulder = string.find(rawDesc, "#s3#") or string.find(cleanSource, "Shoulder")
+        local sBack     = string.find(rawDesc, "#s4#") or string.find(cleanSource, "Cloak")
+        local sChest    = string.find(rawDesc, "#s5#") or ((string.find(cleanSource, "Chest") or string.find(cleanSource, "Robe")) and not isChestObj)
+        local sShirt    = string.find(rawDesc, "#s6#") or string.find(cleanSource, "Shirt")
+        local sTabard   = string.find(rawDesc, "#s7#") or string.find(cleanSource, "Tabard")
+        local sWrist    = string.find(rawDesc, "#s8#") or string.find(cleanSource, "Bracer")
+        local sHands    = string.find(rawDesc, "#s9#") or string.find(cleanSource, "Glove")
+        local sWaist    = string.find(rawDesc, "#s10#") or string.find(cleanSource, "Belt")
+        local sLegs     = string.find(rawDesc, "#s11#") or string.find(cleanSource, "Pant") or string.find(cleanSource, "Leg")
+        local sFeet     = string.find(rawDesc, "#s12#") or string.find(cleanSource, "Boot")
+        local sFinger   = string.find(rawDesc, "#s13#") or string.find(cleanSource, "Ring")
+        local sTrinket  = string.find(rawDesc, "#s14#") or string.find(cleanSource, "Trinket")
+        local sMain     = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h2#") or string.find(rawDesc, "#h3#") or string.find(cleanSource, "Weapon")
+        local sOff      = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h4#") or string.find(rawDesc, "#w8#") or string.find(rawDesc, "#s15#") or string.find(cleanSource, "Shield")
         local sRanged   = string.find(rawDesc, "#s16#") or string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#")
 
         if not (sHead or sNeck or sShoulder or sBack or sChest or sShirt or sTabard or sWrist or sHands or sWaist or sLegs or sFeet or sFinger or sTrinket or sMain or sOff or sRanged) then
@@ -326,6 +407,10 @@ local function IndexAtlasLootData()
         elseif string.find(rawDesc, "#a3#") then armorType = "Mail"
         elseif string.find(rawDesc, "#a2#") then armorType = "Leather"
         elseif string.find(rawDesc, "#a1#") then armorType = "Cloth"
+        elseif string.find(cleanSource, "Tailoring") then armorType = "Cloth"
+        elseif string.find(cleanSource, "Leather") then armorType = "Leather"
+        elseif string.find(cleanSource, "Smithing") or string.find(cleanSource, "Blacksmithing") then
+            armorType = "Plate"
         end
 
         -- Extract Weapon Type
@@ -346,6 +431,18 @@ local function IndexAtlasLootData()
             fullIcon = "Interface\\Icons\\" .. fullIcon
         end
 
+        -- Estimate level from craft skill requirement if available (=so1=XXX)
+        local effLvl = 0
+        local _, _, reqSkill = string.find(rawDesc, "=so1=(%d+)")
+        if reqSkill then
+            local sk = tonumber(reqSkill) or 0
+            if sk <= 75 then effLvl = math.floor(sk / 5) + 1
+            elseif sk <= 150 then effLvl = 15 + math.floor((sk - 75) / 5)
+            elseif sk <= 225 then effLvl = 30 + math.floor((sk - 150) / 5)
+            else effLvl = 45 + math.floor((sk - 225) / 5)
+            end
+        end
+
         local itemObj = {
             id = itemID,
             name = cleanName,
@@ -357,7 +454,8 @@ local function IndexAtlasLootData()
             source = cleanSource,
             sourceMinLvl = sourceMinLvl,
             sourceMaxLvl = sourceMaxLvl,
-            reqLevel = sourceMinLvl or 0,
+            effLevel = (effLvl > 0 and effLvl) or nil,
+            reqLevel = (effLvl > 0 and effLvl) or sourceMinLvl or 0,
             itemLevel = 0,
         }
 
@@ -415,8 +513,8 @@ local function IndexAtlasLootData()
                         if minL and maxL then
                             sourceMinLvl = tonumber(minL)
                             sourceMaxLvl = tonumber(maxL)
-                            -- Skip entire sub-level 38 dungeons
-                            if sourceMaxLvl and sourceMaxLvl < 38 then
+                            -- Skip entire sub-level 20 dungeons
+                            if sourceMaxLvl and sourceMaxLvl < 20 then
                                 skipTable = true
                             end
                         elseif string.find(zone, "%[RAID%]") then
@@ -468,6 +566,7 @@ local CurrentBrowserItems = {}
 local BrowserPage = 1
 local ROWS_PER_PAGE = 7
 local enchMenuFrame = nil
+local UpdateSetUI = nil
 
 local ArmorButtons = {}
 local LevelButtons = {}
@@ -475,24 +574,20 @@ local SortButtonRef = nil
 
 local function GetEffectiveLevel(item)
     if not item then return 0 end
-    if item.effLevel and type(item.effLevel) == "number" and item.effLevel > 0 then
-        return item.effLevel
-    end
-    if item.reqLevel and type(item.reqLevel) == "number" and item.reqLevel > 0 then
-        item.effLevel = item.reqLevel
-        return item.reqLevel
-    end
-    -- In WoW 1.12.1 (Vanilla): GetItemInfo returns:
-    -- 1:name, 2:link, 3:rarity, 4:minLevel (number), 5:type (string), 6:subType (string), 7:stackCount, 8:equipLoc, 9:texture
-    local gName, _, gQual, gMinLevel, _, _, _, _, gTex = GetItemInfo(item.id)
+    local gName, _, gQual, gMinLevel = GetItemInfo(item.id)
     if gMinLevel and type(gMinLevel) == "number" and gMinLevel > 0 then
         item.reqLevel = gMinLevel
         item.effLevel = gMinLevel
         return gMinLevel
     end
+    if item.effLevel and type(item.effLevel) == "number" and item.effLevel > 0 then
+        return item.effLevel
+    end
+    if item.reqLevel and type(item.reqLevel) == "number" and item.reqLevel > 0 then
+        return item.reqLevel
+    end
     local sMin = tonumber(item.sourceMinLvl) or 0
     if sMin > 0 then
-        item.effLevel = sMin
         return sMin
     end
     item.effLevel = 0
@@ -506,22 +601,35 @@ local function MatchesLevelFilter(effLvl, item, filter)
     local sMax = tonumber(item and item.sourceMaxLvl) or 0
     local req = tonumber(item and item.reqLevel) or 0
 
+    local level = eff
+    if level == 0 then level = req end
+
     if filter == "40+" then
-        if eff >= 40 or req >= 40 then return true end
-        if sMin >= 38 then return true end
-        if eff == 0 and req == 0 then return true end -- allow uncached items from AtlasLoot
+        if level >= 40 then return true end
+        if sMax >= 40 or sMin >= 38 then return true end
+        if level == 0 and sMin == 0 and sMax == 0 then return true end -- allow uncached items from AtlasLoot
         return false
     elseif filter == "40-49" then
-        if (eff >= 40 and eff <= 49) or (req >= 40 and req <= 49) then return true end
-        if sMin >= 38 and sMin <= 49 then return true end
+        if level >= 38 and level <= 49 then return true end
+        -- Dungeon range overlap with [40, 49]
+        if sMin > 0 and sMax > 0 then
+            if sMin <= 49 and sMax >= 40 then return true end
+        elseif sMin > 0 then
+            if sMin >= 38 and sMin <= 49 then return true end
+        end
         return false
     elseif filter == "50-59" then
-        if (eff >= 50 and eff <= 59) or (req >= 50 and req <= 59) then return true end
-        if sMin >= 50 and sMin <= 59 then return true end
+        if level >= 50 and level <= 59 then return true end
+        -- Dungeon range overlap with [50, 59]
+        if sMin > 0 and sMax > 0 then
+            if sMin <= 59 and sMax >= 50 then return true end
+        elseif sMin > 0 then
+            if sMin >= 50 and sMin <= 59 then return true end
+        end
         return false
     elseif filter == "60" then
-        if eff >= 60 or req >= 60 then return true end
-        if sMin >= 58 or sMax >= 60 then return true end
+        if level >= 60 then return true end
+        if sMax >= 60 or sMin >= 58 then return true end
         return false
     end
     return true
@@ -569,12 +677,21 @@ local function UpdateStatSummary()
         spellDmg = 0, healing = 0, mp5 = 0,
     }
 
+    local hasUncached = false
+
     -- 1. Sum up gear stats
     for slotName, item in pairs(EquippedGear) do
         if item and item.id then
             local s = ScanItemStats(item.id)
+            local itemHadStat = false
             for k, val in pairs(s) do
-                if total[k] then total[k] = total[k] + val end
+                if total[k] then
+                    total[k] = total[k] + val
+                    if val > 0 then itemHadStat = true end
+                end
+            end
+            if not itemHadStat and not ItemStatsCache[item.id] then
+                hasUncached = true
             end
         end
     end
@@ -590,20 +707,29 @@ local function UpdateStatSummary()
         end
     end
 
-    -- Update Stat display labels
-    if StatLabels.str then StatLabels.str:SetText(string.format("Strength: |cFFFFFFFF%d|r", total.str)) end
-    if StatLabels.agi then StatLabels.agi:SetText(string.format("Agility: |cFFFFFFFF%d|r", total.agi)) end
-    if StatLabels.sta then StatLabels.sta:SetText(string.format("Stamina: |cFFFFFFFF%d|r", total.sta)) end
+    PendingStatUpdate = hasUncached
+
+    -- Update Stat display labels (2-column layout)
+    if StatLabels.str then StatLabels.str:SetText(string.format("Str: |cFFFFFFFF%d|r", total.str)) end
+    if StatLabels.agi then StatLabels.agi:SetText(string.format("Agi: |cFFFFFFFF%d|r", total.agi)) end
+    if StatLabels.sta then StatLabels.sta:SetText(string.format("Sta: |cFFFFFFFF%d|r", total.sta)) end
+    if StatLabels.int then StatLabels.int:SetText(string.format("Int: |cFFFFFFFF%d|r", total.int)) end
+    if StatLabels.spi then StatLabels.spi:SetText(string.format("Spi: |cFFFFFFFF%d|r", total.spi)) end
+
     if StatLabels.armor then StatLabels.armor:SetText(string.format("Armor: |cFFFFFFFF%d|r", total.armor)) end
-    if StatLabels.ap then StatLabels.ap:SetText(string.format("Attack Power: |cFFFFD100%d|r", total.ap + (total.str * 2))) end
-    if StatLabels.hit then StatLabels.hit:SetText(string.format("Hit Rating: |cFF00FFCC+%d%%|r", total.hit)) end
-    if StatLabels.crit then StatLabels.crit:SetText(string.format("Crit Bonus: |cFF00FFCC+%.1f%%|r", total.crit + (total.agi / 20))) end
-    if StatLabels.def then StatLabels.def:SetText(string.format("Defense: |cFF00FFCC+%d|r", total.defense)) end
+    if StatLabels.ap then StatLabels.ap:SetText(string.format("AP: |cFFFFD100%d|r", total.ap + (total.str * 2))) end
+    if StatLabels.hit then StatLabels.hit:SetText(string.format("Hit: |cFF00FFCC+%d%%|r", total.hit)) end
+    if StatLabels.crit then StatLabels.crit:SetText(string.format("Crit: |cFF00FFCC+%.1f%%|r", total.crit + (total.agi / 20))) end
+    if StatLabels.def then StatLabels.def:SetText(string.format("Def: |cFF00FFCC+%d|r", total.defense)) end
+
     if StatLabels.dodge then StatLabels.dodge:SetText(string.format("Dodge: |cFF00FFCC+%.1f%%|r", total.dodge + (total.agi / 20))) end
     if StatLabels.parry then StatLabels.parry:SetText(string.format("Parry: |cFF00FFCC+%d%%|r", total.parry)) end
     if StatLabels.block then StatLabels.block:SetText(string.format("Block: |cFF00FFCC+%d%%|r", total.block)) end
-    if StatLabels.sp then StatLabels.sp:SetText(string.format("Spell Power: |cFFCC99FF+%d|r", total.spellDmg)) end
-    if StatLabels.heal then StatLabels.heal:SetText(string.format("Bonus Heal: |cFF33FF66+%d|r", total.healing)) end
+    if StatLabels.bv then StatLabels.bv:SetText(string.format("BlkVal: |cFF00FFCC+%d|r", total.blockValue)) end
+
+    if StatLabels.sp then StatLabels.sp:SetText(string.format("Spell: |cFFCC99FF+%d|r", total.spellDmg)) end
+    if StatLabels.heal then StatLabels.heal:SetText(string.format("Heal: |cFF33FF66+%d|r", total.healing)) end
+    if StatLabels.mp5 then StatLabels.mp5:SetText(string.format("MP5: |cFF66CCFF+%d|r", total.mp5)) end
 end
 
 local function HighlightActiveSlot()
@@ -665,6 +791,37 @@ local function RefreshSlotDisplay(slotName)
 end
 
 local function UpdateBrowserList()
+    if not ActiveSlot then return end
+
+    local querySlot = ActiveSlot.name
+    if querySlot == "FINGER1" or querySlot == "FINGER2" then querySlot = "FINGER" end
+    if querySlot == "TRINKET1" or querySlot == "TRINKET2" then querySlot = "TRINKET" end
+
+    local rawList = ItemDatabase[querySlot] or {}
+    CurrentBrowserItems = {}
+
+    local searchLower = string.lower(FilterSearchText or "")
+    local isNonArmorSlot = (querySlot == "BACK" or querySlot == "NECK" or querySlot == "FINGER" or querySlot == "TRINKET" or querySlot == "SHIRT" or querySlot == "TABARD")
+
+    for _, it in ipairs(rawList) do
+        local matchArmor = isNonArmorSlot or (FilterArmor == "ALL") or (it.armorType == FilterArmor) or (it.weaponType == FilterArmor)
+        if not matchArmor and FilterArmor ~= "ALL" and it.id then
+            local _, _, _, _, _, gSubType = GetItemInfo(it.id)
+            if gSubType and gSubType == FilterArmor then
+                it.armorType = gSubType
+                matchArmor = true
+            end
+        end
+
+        local matchText = (searchLower == "") or (string.find(string.lower(it.name or ""), searchLower, 1, true) ~= nil)
+
+        local effLvl = it.effLevel or GetEffectiveLevel(it)
+        local matchLevel = MatchesLevelFilter(effLvl, it, FilterLevel)
+
+        if matchArmor and matchText and matchLevel then
+            table.insert(CurrentBrowserItems, it)
+        end
+    end
     if not ActiveSlot then return end
 
     local querySlot = ActiveSlot.name
@@ -839,7 +996,7 @@ end
 local function BuildUI()
     if Planner.isBuilt then return end
 
-    Planner:SetWidth(580)
+    Planner:SetWidth(600)
     Planner:SetHeight(396)
     Planner:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     Planner:SetFrameStrata("HIGH")
@@ -1281,10 +1438,10 @@ local function BuildUI()
     Planner.pageText = pTxt
 
     -- ------------------------------------------------------------------------
-    -- 3. RIGHT PANEL: Live Stat Summary
+    -- 3. RIGHT PANEL: Live Stat Summary & Gear Sets
     -- ------------------------------------------------------------------------
     local statPanel = CreateFrame("Frame", "OctoBiSStatPanel", Planner)
-    statPanel:SetWidth(136)
+    statPanel:SetWidth(156)
     statPanel:SetHeight(346)
     statPanel:SetPoint("TOPLEFT", browser, "TOPRIGHT", 6, 0)
     statPanel:SetBackdrop({
@@ -1299,46 +1456,254 @@ local function BuildUI()
     sTitle:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -6)
     sTitle:SetText("|cFFFFD100Total Stats|r")
 
-    local function MakeStat(name, yOff)
+    local function MakeStat(xOff, yOff)
         local fs = statPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        fs:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, yOff)
+        fs:SetPoint("TOPLEFT", statPanel, "TOPLEFT", xOff, yOff)
         fs:SetJustifyH("LEFT")
         return fs
     end
 
-    StatLabels.str = MakeStat("Strength", -22)
-    StatLabels.agi = MakeStat("Agility", -35)
-    StatLabels.sta = MakeStat("Stamina", -48)
-    StatLabels.armor = MakeStat("Armor", -61)
+    -- 2 Columns of stats
+    StatLabels.str = MakeStat(8, -22)
+    StatLabels.agi = MakeStat(8, -34)
+    StatLabels.sta = MakeStat(8, -46)
+    StatLabels.int = MakeStat(8, -58)
+    StatLabels.spi = MakeStat(8, -70)
+
+    StatLabels.armor = MakeStat(78, -22)
+    StatLabels.ap    = MakeStat(78, -34)
+    StatLabels.hit   = MakeStat(78, -46)
+    StatLabels.crit  = MakeStat(78, -58)
+    StatLabels.def   = MakeStat(78, -70)
 
     local line1 = statPanel:CreateTexture(nil, "ARTWORK")
-    line1:SetWidth(120) line1:SetHeight(1) line1:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -75)
-    line1:SetTexture(0.5, 0.5, 0.5, 0.8)
+    line1:SetWidth(140) line1:SetHeight(1) line1:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -82)
+    line1:SetTexture(0.3, 0.45, 0.6, 0.6)
 
-    StatLabels.ap = MakeStat("AP", -79)
-    StatLabels.hit = MakeStat("Hit", -92)
-    StatLabels.crit = MakeStat("Crit", -105)
+    StatLabels.dodge = MakeStat(8, -85)
+    StatLabels.parry = MakeStat(78, -85)
+    StatLabels.block = MakeStat(8, -97)
+    StatLabels.bv    = MakeStat(78, -97)
 
     local line2 = statPanel:CreateTexture(nil, "ARTWORK")
-    line2:SetWidth(120) line2:SetHeight(1) line2:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -119)
-    line2:SetTexture(0.5, 0.5, 0.5, 0.8)
+    line2:SetWidth(140) line2:SetHeight(1) line2:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -109)
+    line2:SetTexture(0.3, 0.45, 0.6, 0.6)
 
-    StatLabels.def = MakeStat("Defense", -123)
-    StatLabels.dodge = MakeStat("Dodge", -136)
-    StatLabels.parry = MakeStat("Parry", -149)
-    StatLabels.block = MakeStat("Block", -162)
+    StatLabels.sp   = MakeStat(8, -112)
+    StatLabels.heal = MakeStat(78, -112)
+    StatLabels.mp5  = MakeStat(8, -124)
 
     local line3 = statPanel:CreateTexture(nil, "ARTWORK")
-    line3:SetWidth(120) line3:SetHeight(1) line3:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -176)
-    line3:SetTexture(0.5, 0.5, 0.5, 0.8)
+    line3:SetWidth(140) line3:SetHeight(1) line3:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -137)
+    line3:SetTexture(0.3, 0.45, 0.6, 0.8)
 
-    StatLabels.sp = MakeStat("SpellPower", -180)
-    StatLabels.heal = MakeStat("Healing", -193)
+    -- ------------------------------------------------------------------------
+    -- Gear Set Manager (Save / Load 5 Profiles)
+    -- ------------------------------------------------------------------------
+    local ActiveSetSlot = 1
+    local SetSlotButtons = {}
+    local SetNameBox = nil
+
+    local function GetPlayerKey()
+        local name = UnitName("player") or "Player"
+        local realm = GetRealmName() or "Realm"
+        return name .. " - " .. realm
+    end
+
+    UpdateSetUI = function()
+        OctoBiSPlannerDB = OctoBiSPlannerDB or {}
+        OctoBiSPlannerDB.sets = OctoBiSPlannerDB.sets or {}
+        local pKey = GetPlayerKey()
+        OctoBiSPlannerDB.sets[pKey] = OctoBiSPlannerDB.sets[pKey] or {}
+        local sets = OctoBiSPlannerDB.sets[pKey]
+
+        for i = 1, 5 do
+            local btn = SetSlotButtons[i]
+            if btn then
+                local setData = sets[i]
+                if i == ActiveSetSlot then
+                    btn:SetBackdropBorderColor(0.2, 0.8, 1.0, 1.0)
+                    btn:SetBackdropColor(0.18, 0.35, 0.6, 0.95)
+                    btn.text:SetText("|cFFFFD100" .. i .. "|r")
+                elseif setData then
+                    btn:SetBackdropBorderColor(0.2, 0.7, 0.4, 0.9)
+                    btn:SetBackdropColor(0.1, 0.2, 0.14, 0.8)
+                    btn.text:SetText("|cFF33FF66" .. i .. "|r")
+                else
+                    btn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.6)
+                    btn:SetBackdropColor(0.08, 0.08, 0.12, 0.8)
+                    btn.text:SetText("|cFF888888" .. i .. "|r")
+                end
+            end
+        end
+
+        if SetNameBox then
+            local curSet = sets[ActiveSetSlot]
+            if curSet and curSet.name and curSet.name ~= "" then
+                SetNameBox:SetText(curSet.name)
+            else
+                SetNameBox:SetText("Set " .. ActiveSetSlot)
+            end
+        end
+    end
+
+    local function SaveActiveSet()
+        local pKey = GetPlayerKey()
+        OctoBiSPlannerDB = OctoBiSPlannerDB or {}
+        OctoBiSPlannerDB.sets = OctoBiSPlannerDB.sets or {}
+        OctoBiSPlannerDB.sets[pKey] = OctoBiSPlannerDB.sets[pKey] or {}
+
+        local name = (SetNameBox and SetNameBox:GetText()) or ("Set " .. ActiveSetSlot)
+        if name == "" then name = "Set " .. ActiveSetSlot end
+
+        local gClone = {}
+        for k, v in pairs(EquippedGear) do
+            gClone[k] = { id = v.id, name = v.name, quality = v.quality, icon = v.icon, source = v.source, desc = v.desc, armorType = v.armorType, weaponType = v.weaponType }
+        end
+        local eClone = {}
+        for k, v in pairs(EquippedEnchants) do
+            eClone[k] = v
+        end
+
+        OctoBiSPlannerDB.sets[pKey][ActiveSetSlot] = {
+            name = name,
+            gear = gClone,
+            enchants = eClone,
+        }
+
+        UpdateSetUI()
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF00FFCC[OctoBiS Planner]|r Saved set '|cFFFFD100%s|r' to Slot %d.", name, ActiveSetSlot))
+    end
+
+    local function LoadActiveSet()
+        local pKey = GetPlayerKey()
+        OctoBiSPlannerDB = OctoBiSPlannerDB or {}
+        OctoBiSPlannerDB.sets = OctoBiSPlannerDB.sets or {}
+        local sets = OctoBiSPlannerDB.sets[pKey] or {}
+        local setData = sets[ActiveSetSlot]
+
+        if not setData or not setData.gear then
+            DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFFFF4444[OctoBiS Planner]|r Slot %d is empty. Save a set first!", ActiveSetSlot))
+            return
+        end
+
+        EquippedGear = {}
+        for k, v in pairs(setData.gear) do
+            EquippedGear[k] = v
+        end
+
+        EquippedEnchants = {}
+        if setData.enchants then
+            for k, v in pairs(setData.enchants) do
+                EquippedEnchants[k] = v
+            end
+        end
+
+        for _, s in ipairs(SLOTS) do
+            RefreshSlotDisplay(s.name)
+        end
+        UpdateStatSummary()
+
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF00FFCC[OctoBiS Planner]|r Loaded gear set '|cFFFFD100%s|r' (Slot %d).", setData.name or ("Set " .. ActiveSetSlot), ActiveSetSlot))
+    end
+
+    local function ClearActiveSet()
+        local pKey = GetPlayerKey()
+        if OctoBiSPlannerDB and OctoBiSPlannerDB.sets and OctoBiSPlannerDB.sets[pKey] then
+            OctoBiSPlannerDB.sets[pKey][ActiveSetSlot] = nil
+        end
+        UpdateSetUI()
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cFF00FFCC[OctoBiS Planner]|r Cleared saved set for Slot %d.", ActiveSetSlot))
+    end
+
+    local setHdr = statPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    setHdr:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -141)
+    setHdr:SetText("|cFFFFD100Saved Sets (1-5):|r")
+
+    -- 5 Slot Buttons [1] [2] [3] [4] [5]
+    local curSetX = 8
+    for i = 1, 5 do
+        local sBtn = CreateFrame("Button", "OctoBiSSetSlotBtn_" .. i, statPanel)
+        sBtn:SetWidth(26)
+        sBtn:SetHeight(18)
+        sBtn:SetPoint("TOPLEFT", statPanel, "TOPLEFT", curSetX, -156)
+        curSetX = curSetX + 28
+        sBtn:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            edgeSize = 8, insets = { left = 1, right = 1, top = 1, bottom = 1 }
+        })
+        sBtn:SetBackdropColor(0.08, 0.08, 0.12, 0.8)
+        sBtn:SetBackdropBorderColor(0.25, 0.25, 0.3, 0.6)
+        sBtn:EnableMouse(true)
+        sBtn:RegisterForClicks("LeftButtonUp")
+
+        local stxt = sBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        stxt:SetPoint("CENTER", sBtn, "CENTER", 0, 0)
+        stxt:SetText(tostring(i))
+        sBtn.text = stxt
+        sBtn.slotIndex = i
+
+        sBtn:SetScript("OnClick", function()
+            ActiveSetSlot = this.slotIndex
+            UpdateSetUI()
+        end)
+        sBtn:SetScript("OnEnter", function()
+            local pKey = GetPlayerKey()
+            local sets = (OctoBiSPlannerDB and OctoBiSPlannerDB.sets and OctoBiSPlannerDB.sets[pKey]) or {}
+            local sData = sets[this.slotIndex]
+            GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+            GameTooltip:SetText(string.format("Set Slot %d", this.slotIndex), 1, 0.85, 0.1)
+            if sData and sData.name then
+                GameTooltip:AddLine("Name: |cFFFFFFFF" .. sData.name .. "|r")
+                GameTooltip:AddLine("|cFF33FF66<Click to Select, then Load>|r")
+            else
+                GameTooltip:AddLine("|cFF888888(Empty Slot)|r")
+            end
+            GameTooltip:Show()
+        end)
+        sBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        SetSlotButtons[i] = sBtn
+    end
+
+    -- Set Name EditBox
+    local setBox = CreateFrame("EditBox", "OctoBiSSetNameEdit", statPanel, "InputBoxTemplate")
+    setBox:SetWidth(138)
+    setBox:SetHeight(18)
+    setBox:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 14, -177)
+    setBox:SetAutoFocus(false)
+    setBox:SetScript("OnEscapePressed", function() this:ClearFocus() end)
+    setBox:SetScript("OnEnterPressed", function() this:ClearFocus(); SaveActiveSet() end)
+    SetNameBox = setBox
+
+    -- Save & Load buttons
+    local saveBtn = CreateFrame("Button", nil, statPanel, "UIPanelButtonTemplate")
+    saveBtn:SetWidth(68) saveBtn:SetHeight(18)
+    saveBtn:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -198)
+    saveBtn:SetText("Save Set")
+    saveBtn:SetScript("OnClick", SaveActiveSet)
+
+    local loadBtn = CreateFrame("Button", nil, statPanel, "UIPanelButtonTemplate")
+    loadBtn:SetWidth(68) loadBtn:SetHeight(18)
+    loadBtn:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 80, -198)
+    loadBtn:SetText("Load Set")
+    loadBtn:SetScript("OnClick", LoadActiveSet)
+
+    local clrSetBtn = CreateFrame("Button", nil, statPanel, "UIPanelButtonTemplate")
+    clrSetBtn:SetWidth(140) clrSetBtn:SetHeight(16)
+    clrSetBtn:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -218)
+    clrSetBtn:SetText("Delete Set")
+    clrSetBtn:SetScript("OnClick", ClearActiveSet)
+
+    local line4 = statPanel:CreateTexture(nil, "ARTWORK")
+    line4:SetWidth(140) line4:SetHeight(1) line4:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -238)
+    line4:SetTexture(0.3, 0.45, 0.6, 0.6)
 
     -- Quick Action Buttons
     local impBtn = CreateFrame("Button", nil, statPanel, "UIPanelButtonTemplate")
-    impBtn:SetWidth(120) impBtn:SetHeight(20)
-    impBtn:SetPoint("BOTTOM", statPanel, "BOTTOM", 0, 52)
+    impBtn:SetWidth(140) impBtn:SetHeight(18)
+    impBtn:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -243)
     impBtn:SetText("Import Current")
     impBtn:SetScript("OnClick", function()
         for _, s in ipairs(SLOTS) do
@@ -1368,9 +1733,9 @@ local function BuildUI()
     end)
 
     local clrBtn = CreateFrame("Button", nil, statPanel, "UIPanelButtonTemplate")
-    clrBtn:SetWidth(120) clrBtn:SetHeight(20)
-    clrBtn:SetPoint("BOTTOM", statPanel, "BOTTOM", 0, 28)
-    clrBtn:SetText("Clear All")
+    clrBtn:SetWidth(140) clrBtn:SetHeight(18)
+    clrBtn:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -263)
+    clrBtn:SetText("Clear Equips")
     clrBtn:SetScript("OnClick", function()
         EquippedGear = {}
         EquippedEnchants = {}
@@ -1379,8 +1744,8 @@ local function BuildUI()
     end)
 
     local shareBtn = CreateFrame("Button", nil, statPanel, "UIPanelButtonTemplate")
-    shareBtn:SetWidth(120) shareBtn:SetHeight(20)
-    shareBtn:SetPoint("BOTTOM", statPanel, "BOTTOM", 0, 4)
+    shareBtn:SetWidth(140) shareBtn:SetHeight(18)
+    shareBtn:SetPoint("TOPLEFT", statPanel, "TOPLEFT", 8, -283)
     shareBtn:SetText("Share in Chat")
     shareBtn:SetScript("OnClick", function()
         local links = {}
@@ -1407,6 +1772,20 @@ local function BuildUI()
             DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[OctoBiS Planner]:|r No items equipped to share.")
         end
     end)
+
+    -- Deferred ticker to refresh stats once server returns uncached item info
+    local statTicker = 0
+    Planner:SetScript("OnUpdate", function()
+        statTicker = statTicker + arg1
+        if statTicker >= 0.4 then
+            statTicker = 0
+            if PendingStatUpdate and Planner:IsShown() then
+                UpdateStatSummary()
+            end
+        end
+    end)
+
+    UpdateSetUI()
 
     -- ------------------------------------------------------------------------
     -- 4. Enchant Selection Menu (Global Frame)
@@ -1497,6 +1876,7 @@ function OctoBiSPlanner_Toggle()
         end
         Planner:Show()
         UpdateStatSummary()
+        if UpdateSetUI then UpdateSetUI() end
         if not ActiveSlot then
             OpenSlotBrowser(SLOTS[1])
         else
