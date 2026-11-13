@@ -7234,6 +7234,125 @@ local function InitWarriorCombatHUD()
     MakeElementMovable(rageBar, "ragebar", 0, -146, 190, 14, false)
 
     -- ------------------------------------------------------------------------
+    -- Tactical Mastery Retained-Rage Marker (Line inside Rage Bar)
+    -- ------------------------------------------------------------------------
+    local tmMarker = rageBar:CreateTexture(nil, "OVERLAY")
+    tmMarker:SetWidth(2)
+    tmMarker:SetTexture(1, 0.85, 0.1, 0.95)
+    tmMarker:SetPoint("TOPLEFT", rageBar, "TOPLEFT", 0, 0)
+    tmMarker:SetPoint("BOTTOMLEFT", rageBar, "BOTTOMLEFT", 0, 0)
+
+    local tmMarkerText = rageBar:CreateFontString(nil, "OVERLAY")
+    tmMarkerText:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
+    tmMarkerText:SetPoint("BOTTOM", tmMarker, "TOP", 0, 1)
+    tmMarkerText:SetTextColor(1, 0.85, 0.1, 1)
+    tmMarkerText:SetText("25")
+
+    local stanceDeltaText = rageBar:CreateFontString(nil, "OVERLAY")
+    stanceDeltaText:SetFont("Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
+    stanceDeltaText:SetPoint("RIGHT", rageBar, "RIGHT", -4, 0)
+    stanceDeltaText:SetText("")
+
+    -- ------------------------------------------------------------------------
+    -- Tactical Mastery Talent Detection (Auto-detects Rank 0-5)
+    -- ------------------------------------------------------------------------
+    local cachedTMRage = 0
+    local function GetTacticalMasteryRage()
+        local numTabs = GetNumTalentTabs()
+        if not numTabs or numTabs == 0 then return 0 end
+        for t = 1, numTabs do
+            local numTalents = GetNumTalents(t) or 0
+            for i = 1, numTalents do
+                local name, iconTexture, tier, column, currentRank = GetTalentInfo(t, i)
+                if name and (string.find(name, "Tactical Mastery") or (iconTexture and string.find(iconTexture, "Spell_Nature_EnchantArmor")) or (t == 1 and tier == 2 and column == 2)) then
+                    return (currentRank or 0) * 5
+                end
+            end
+        end
+        return 0
+    end
+
+    -- ------------------------------------------------------------------------
+    -- Tactical Stance Dance Advisor (Floating/Docked Rage Icon Reminder)
+    -- ------------------------------------------------------------------------
+    local stanceAdvisor = CreateFrame("Button", "CleveRoidStanceAdvisor", UIParent)
+    stanceAdvisor:SetFrameStrata("MEDIUM")
+    stanceAdvisor:SetWidth(26)
+    stanceAdvisor:SetHeight(26)
+
+    local sBg = stanceAdvisor:CreateTexture(nil, "BACKGROUND")
+    sBg:SetAllPoints(stanceAdvisor)
+    sBg:SetTexture(0, 0, 0, 0.85)
+
+    local sIcon = stanceAdvisor:CreateTexture(nil, "ARTWORK")
+    sIcon:SetPoint("TOPLEFT", stanceAdvisor, "TOPLEFT", 1, -1)
+    sIcon:SetPoint("BOTTOMRIGHT", stanceAdvisor, "BOTTOMRIGHT", -1, 1)
+    sIcon:SetTexture("Interface\\Icons\\Ability_Racial_BloodRage")
+    sIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    stanceAdvisor.icon = sIcon
+
+    stanceAdvisor:SetBackdrop({
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        edgeSize = 8,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 }
+    })
+    stanceAdvisor:SetBackdropBorderColor(0.2, 0.95, 0.2, 1.0)
+
+    local sGlow = stanceAdvisor:CreateTexture(nil, "OVERLAY")
+    sGlow:SetPoint("TOPLEFT", stanceAdvisor, "TOPLEFT", -3, 3)
+    sGlow:SetPoint("BOTTOMRIGHT", stanceAdvisor, "BOTTOMRIGHT", 3, -3)
+    sGlow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+    sGlow:SetBlendMode("ADD")
+    sGlow:SetVertexColor(0.2, 0.95, 0.2, 0.65)
+    stanceAdvisor.glow = sGlow
+
+    local sLossText = stanceAdvisor:CreateFontString(nil, "OVERLAY")
+    sLossText:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    sLossText:SetPoint("CENTER", stanceAdvisor, "CENTER", 0, 0)
+    sLossText:SetTextColor(0.2, 1.0, 0.2, 1.0)
+    sLossText:SetText("0")
+    stanceAdvisor.lossText = sLossText
+
+    local sStatusText = stanceAdvisor:CreateFontString(nil, "OVERLAY")
+    sStatusText:SetFont("Fonts\\FRIZQT__.TTF", 8, "OUTLINE")
+    sStatusText:SetPoint("TOP", stanceAdvisor, "BOTTOM", 0, -1)
+    sStatusText:SetTextColor(0.2, 1.0, 0.2, 1.0)
+    sStatusText:SetText("SAFE")
+    stanceAdvisor.statusText = sStatusText
+
+    MakeElementMovable(stanceAdvisor, "stance_advisor", 112, -146, 26, 26, true)
+
+    stanceAdvisor:EnableMouse(true)
+    stanceAdvisor:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Stance Dance Advisor", 1, 0.85, 0.1)
+        local curR = UnitMana("player") or 0
+        local tmR = cachedTMRage or 0
+        local loss = math.max(0, curR - tmR)
+        GameTooltip:AddLine("Current Rage: |cFFFFFFFF" .. curR .. "|r", 0.9, 0.9, 0.9)
+        GameTooltip:AddLine("Tactical Mastery Cap: |cFFFFD100" .. tmR .. " Rage|r", 0.9, 0.9, 0.9)
+        if loss == 0 then
+            GameTooltip:AddLine("Rage Lost on Stance Change: |cFF20FF200 (100% Retained)|r")
+            GameTooltip:AddLine("|cFF20FF20SAFE TO STANCE DANCE|r", 0.2, 1, 0.2)
+        elseif loss <= 20 then
+            GameTooltip:AddLine(string.format("Rage Lost on Stance Change: |cFFFF9900-%d Rage|r", loss))
+            GameTooltip:AddLine("|cFFFF9900MODERATE RAGE LOSS|r", 1, 0.6, 0)
+            GameTooltip:AddLine("Acceptable for utility (Disarm/Pummel/Intercept).", 0.8, 0.8, 0.8)
+        else
+            GameTooltip:AddLine(string.format("Rage Lost on Stance Change: |cFFFF2020-%d Rage|r", loss))
+            GameTooltip:AddLine("|cFFFF2020HEAVY RAGE LOSS (NOT WORTH IT)|r", 1, 0.2, 0.2)
+            GameTooltip:AddLine("Spend rage on attacks before swapping stances!", 1, 0.8, 0.8)
+        end
+        if isUnlocked then
+            GameTooltip:AddLine("|cFF888888<Shift-Drag to Move, Scroll to Resize>|r")
+        end
+        GameTooltip:Show()
+    end)
+    stanceAdvisor:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    -- ------------------------------------------------------------------------
     -- State & Swing Logic (Auto-adapts to 1H vs 2H weapon!)
     -- ------------------------------------------------------------------------
     local swingActive = false
@@ -7331,14 +7450,63 @@ local function InitWarriorCombatHUD()
         local maxRage = UnitManaMax("player") or 100
         if maxRage <= 0 then maxRage = 100 end
         rageBar:SetMinMaxValues(0, maxRage)
+
         if isUnlocked and curRage == 0 then
-            rageBar:SetValue(65)
-            rageText:SetText("65")
+            curRage = 65
             rageBar:SetBackdropBorderColor(0.8, 0.2, 0.2, 1.0)
         else
-            rageBar:SetValue(curRage)
-            rageText:SetText(tostring(curRage))
             rageBar:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+        end
+
+        rageBar:SetValue(curRage)
+        rageText:SetText(tostring(curRage))
+
+        if not cachedTMRage or cachedTMRage == 0 then
+            cachedTMRage = GetTacticalMasteryRage()
+        end
+        local tmRage = cachedTMRage or 0
+
+        -- Update Tactical Mastery threshold line inside rage bar
+        local barW = rageBar:GetWidth() or 190
+        if tmRage > 0 then
+            local offset = (tmRage / maxRage) * barW
+            tmMarker:ClearAllPoints()
+            tmMarker:SetPoint("TOPLEFT", rageBar, "TOPLEFT", offset, 0)
+            tmMarker:SetPoint("BOTTOMLEFT", rageBar, "BOTTOMLEFT", offset, 0)
+            tmMarker:SetHeight(rageBar:GetHeight())
+            tmMarkerText:SetText(tostring(tmRage))
+            tmMarker:Show()
+            tmMarkerText:Show()
+        else
+            tmMarker:Hide()
+            tmMarkerText:Hide()
+        end
+
+        -- Stance loss calculation
+        local loss = math.max(0, curRage - tmRage)
+
+        -- Update live feedback colors & text
+        if loss == 0 then
+            -- Green: Zero Loss / Safe to change stance
+            stanceAdvisor:SetBackdropBorderColor(0.2, 0.95, 0.2, 0.95)
+            if sGlow then sGlow:SetVertexColor(0.2, 0.95, 0.2, 0.65) end
+            if sLossText then sLossText:SetText("|cFF20FF200|r") end
+            if sStatusText then sStatusText:SetText("|cFF20FF20SAFE|r") end
+            stanceDeltaText:SetText("|cFF20FF20[Safe]|r")
+        elseif loss <= 20 then
+            -- Orange: Moderate Loss (10-20 rage)
+            stanceAdvisor:SetBackdropBorderColor(1.0, 0.6, 0.0, 0.95)
+            if sGlow then sGlow:SetVertexColor(1.0, 0.6, 0.0, 0.75) end
+            if sLossText then sLossText:SetText(string.format("|cFFFF9900-%d|r", loss)) end
+            if sStatusText then sStatusText:SetText("|cFFFF9900WARN|r") end
+            stanceDeltaText:SetText(string.format("|cFFFF9900-%d|r", loss))
+        else
+            -- Red: Heavy Loss (> 20 rage) - NOT WORTH IT!
+            stanceAdvisor:SetBackdropBorderColor(1.0, 0.15, 0.15, 1.0)
+            if sGlow then sGlow:SetVertexColor(1.0, 0.15, 0.15, 0.9) end
+            if sLossText then sLossText:SetText(string.format("|cFFFF2020-%d|r", loss)) end
+            if sStatusText then sStatusText:SetText("|cFFFF2020DUMP!|r") end
+            stanceDeltaText:SetText(string.format("|cFFFF2020-%d|r", loss))
         end
     end
 
@@ -7346,6 +7514,8 @@ local function InitWarriorCombatHUD()
     local eventFrame = CreateFrame("Frame")
     eventFrame:RegisterEvent("UNIT_RAGE")
     eventFrame:RegisterEvent("UNIT_MAXRAGE")
+    eventFrame:RegisterEvent("CHARACTER_POINTS_CHANGED")
+    eventFrame:RegisterEvent("SPELLS_CHANGED")
     eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
     eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eventFrame:RegisterEvent("PLAYER_ENTER_COMBAT")
@@ -7371,12 +7541,18 @@ local function InitWarriorCombatHUD()
 
     eventFrame:SetScript("OnEvent", function()
         if event == "UNIT_RAGE" or event == "UNIT_MAXRAGE" then
-            if arg1 == "player" then UpdateRageDisplay()
-        UpdateAuras() end
+            if arg1 == "player" then
+                UpdateRageDisplay()
+                UpdateAuras()
+            end
+        elseif event == "CHARACTER_POINTS_CHANGED" or event == "SPELLS_CHANGED" then
+            cachedTMRage = GetTacticalMasteryRage()
+            UpdateRageDisplay()
         elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+            cachedTMRage = GetTacticalMasteryRage()
             UpdateWeaponMode()
             UpdateRageDisplay()
-        UpdateAuras()
+            UpdateAuras()
         elseif event == "PLAYER_SWING" then
             if arg2 == 0 or arg2 == nil then -- Main hand swing
                 TriggerSwing(arg1)
@@ -7691,10 +7867,12 @@ local function InitWarriorCombatHUD()
         if hud:IsShown() then
             hud:Hide()
             rageBar:Hide()
+            if stanceAdvisor then stanceAdvisor:Hide() end
             if CleveRoidMacros then CleveRoidMacros.WarriorHUDVisible = false end
         else
             hud:Show()
             rageBar:Show()
+            if stanceAdvisor then stanceAdvisor:Show() end
             UpdateRageDisplay()
             UpdateAuras()
             if CleveRoidMacros then CleveRoidMacros.WarriorHUDVisible = true end
@@ -8030,6 +8208,7 @@ local function InitWarriorCombatHUD()
         rendAuraIcon:SetWidth(26); rendAuraIcon:SetHeight(26)
         rendBar:SetWidth(190);     rendBar:SetHeight(12)
         rageBar:SetWidth(190);   rageBar:SetHeight(14)
+        if stanceAdvisor then stanceAdvisor:SetWidth(26); stanceAdvisor:SetHeight(26) end
         defRow:SetWidth(140);    defRow:SetHeight(28)
         offRow:SetWidth(140);    offRow:SetHeight(28)
 
@@ -8079,6 +8258,7 @@ local function InitWarriorCombatHUD()
         rendAuraIcon:ClearAllPoints(); rendAuraIcon:SetPoint("CENTER", UIParent, "CENTER", 108, -75); rendAuraIcon:SetWidth(26); rendAuraIcon:SetHeight(26)
         rendBar:ClearAllPoints();      rendBar:SetPoint("CENTER", UIParent, "CENTER", 0, -100);  rendBar:SetWidth(190); rendBar:SetHeight(12)
         rageBar:ClearAllPoints();    rageBar:SetPoint("CENTER", UIParent, "CENTER", 0, -146); rageBar:SetWidth(190); rageBar:SetHeight(14)
+        if stanceAdvisor then stanceAdvisor:ClearAllPoints(); stanceAdvisor:SetPoint("CENTER", UIParent, "CENTER", 112, -146); stanceAdvisor:SetWidth(26); stanceAdvisor:SetHeight(26) end
         defRow:ClearAllPoints();     defRow:SetPoint("CENTER", UIParent, "CENTER", -215, -75); defRow:SetWidth(140); defRow:SetHeight(28)
         offRow:ClearAllPoints();     offRow:SetPoint("CENTER", UIParent, "CENTER", -215, -112); offRow:SetWidth(140); offRow:SetHeight(28)
 
@@ -8556,10 +8736,12 @@ local function InitWarriorCombatHUD()
     if CleveRoidMacros and CleveRoidMacros.WarriorHUDVisible == false then
         hud:Hide()
         rageBar:Hide()
+        if stanceAdvisor then stanceAdvisor:Hide() end
     else
         UpdateRageDisplay()
         UpdateAuras()
         rageBar:Show()
+        if stanceAdvisor then stanceAdvisor:Show() end
         UpdateHUDVisibility()
     end
 end
