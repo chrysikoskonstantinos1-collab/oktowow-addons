@@ -458,10 +458,16 @@ local function Atr_SlashCmdFunction(msg)
 		local s = AUCTIONATOR_FS_AUTOLOGOUT and "|cff00ff00Enabled|r" or "|cffff4444Disabled|r";
 		zc.msg_atr("Auto-Logout on scan complete: " .. s);
 
+	elseif (cmd == "min" or cmd == "minimize" or cmd == "hud") then
+		if (Atr_ToggleMinimizeScan) then
+			Atr_ToggleMinimizeScan();
+		end
+
 	elseif (cmd == "help" or cmd == "info") then
 		zc.msg_yellow("Auctionator Commands:");
 		zc.msg_yellow("  /atr or /auctionator - Main addon");
 		zc.msg_yellow("  /profit or /gold - Gold & Profit Advisor");
+		zc.msg_yellow("  /atr min - Minimize/Restore scan to floating HUD (crafting mode)");
 		zc.msg_yellow("  /atr lists - Refresh pro shopping lists (BS & flips)");
 		zc.msg_yellow("  /atr options - Open options");
 		zc.msg_yellow("  /atr clear fullscandb - Clear price database");
@@ -2708,6 +2714,16 @@ end
 -----------------------------------------
 
 function Atr_OnAuctionHouseClosed()
+
+	if (Atr_RestoreScan and gAtr_ScanIsMinimized) then
+		Atr_RestoreScan();
+		if (gAtr_FullScanState == ATR_FS_STARTED) then
+			Atr_FullScanPause();
+		end
+		if (DEFAULT_CHAT_FRAME) then
+			DEFAULT_CHAT_FRAME:AddMessage("|cffffcc00[Auctionator]|r Auction House closed (moved out of range). Scan paused.");
+		end
+	end
 
 	Atr_HideAllDialogs();
 	

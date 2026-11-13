@@ -1052,6 +1052,7 @@ local gFS_lastKeepAlive	= 0;
 local gFS_lastPageTime	= 0;
 local gFS_retryCount	= 0;
 local gFS_lastLiveUIRefresh = 0;
+local gFS_lastMiniBarRefresh = 0;
 local gFS_elapsedBeforePause = 0;
 
 -----------------------------------------
@@ -1075,6 +1076,9 @@ function Atr_FullScanStart(resume)
 			DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff00ffff[Auctionator]|r Resuming full scan at page %d / %d...", gFS_page + 1, gFS_pages or 0));
 		end
 		Atr_UpdateFullScanFrame();
+		if (gAtr_ScanIsMinimized) then
+			Atr_UpdateScanMiniBar();
+		end
 		return;
 	end
 
@@ -1103,6 +1107,9 @@ function Atr_FullScanStart(resume)
 	Atr_FullScanResults:Hide();
 	Atr_FullScanHTML:Show();
 	Atr_UpdateFullScanFrame();
+	if (gAtr_ScanIsMinimized) then
+		Atr_UpdateScanMiniBar();
+	end
 
 end
 
@@ -1123,6 +1130,9 @@ function Atr_FullScanPause()
 	end
 
 	Atr_UpdateFullScanFrame();
+	if (gAtr_ScanIsMinimized) then
+		Atr_UpdateScanMiniBar();
+	end
 	if (Atr_ProfitFrame and Atr_ProfitFrame:IsShown() and Atr_RefreshProfitUI) then
 		Atr_RefreshProfitUI();
 	end
@@ -1143,6 +1153,9 @@ function Atr_FullScanAbort()
 	if (Atr_CancelAutoLogout) then Atr_CancelAutoLogout(); end
 	Atr_FullScanStatus:SetText (ZT("Scan stopped"));
 	Atr_UpdateFullScanFrame();
+	if (gAtr_ScanIsMinimized) then
+		Atr_UpdateScanMiniBar();
+	end
 	if (Atr_RefreshProfitUI) then
 		Atr_RefreshProfitUI();
 	end
@@ -1298,6 +1311,10 @@ function Atr_FullScanAnalyze()
 	local flipNotice = (flipCount > 0) and string.format(" | |cffa335ee%d Flips|r", flipCount) or "";
 	Atr_FullScanStatus:SetText (string.format("%s %d / %d (~%dm)%s", ZT("Scanning"), gFS_page, gFS_pages, etaMin, flipNotice));
 
+	if (gAtr_ScanIsMinimized) then
+		Atr_UpdateScanMiniBar();
+	end
+
 	-- Live UI Feedback: Refresh Gold Advisor UI in real-time every 1.5s
 	local now = GetTime();
 	if (now - (gFS_lastLiveUIRefresh or 0) >= 1.5) then
@@ -1394,6 +1411,10 @@ function Atr_FullScanFinish()
 	gFS_qualities = {};
 	gAtr_FullScanState = ATR_FS_NULL;
 
+	if (gAtr_ScanIsMinimized) then
+		Atr_UpdateScanMiniBar();
+	end
+
 	if (AUCTIONATOR_FS_AUTOLOGOUT) then
 		if (DEFAULT_CHAT_FRAME) then
 			DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Auctionator]|r Full scan complete! All items recorded.");
@@ -1427,6 +1448,9 @@ function Atr_CancelAutoLogout()
 		intentionalLogout = false;
 		local status = getglobal("Atr_FullScanStatus");
 		if (status) then status:SetText(ZT("Scan complete")); end
+		if (gAtr_ScanIsMinimized and gAtr_ScanMiniBar and gAtr_ScanMiniBar:IsShown()) then
+			gAtr_ScanMiniBar.status:SetText("|cff00ff00Scan complete!|r Click Expand");
+		end
 		if (DEFAULT_CHAT_FRAME) then
 			DEFAULT_CHAT_FRAME:AddMessage("|cffffaa00[Auctionator]|r Auto-logout cancelled.");
 		end
@@ -1442,11 +1466,17 @@ logoutDriver:SetScript("OnUpdate", function()
 	if (status and status:IsShown()) then
 		status:SetText(string.format("|cffffcc00Scan complete! Auto-logging out in %d...|r", math.max(1, math.ceil(logoutRemaining))));
 	end
+	if (gAtr_ScanIsMinimized and gAtr_ScanMiniBar and gAtr_ScanMiniBar:IsShown()) then
+		gAtr_ScanMiniBar.status:SetText(string.format("|cffffcc00Auto-Logout in %ds...|r", math.max(1, math.ceil(logoutRemaining))));
+	end
 
 	if (logoutRemaining <= 0) then
 		logoutActive = false;
 		intentionalLogout = true;
 		if (status) then status:SetText("Logging out to save data..."); end
+		if (gAtr_ScanIsMinimized and gAtr_ScanMiniBar and gAtr_ScanMiniBar:IsShown()) then
+			gAtr_ScanMiniBar.status:SetText("Logging out to save data...");
+		end
 		Logout();
 	end
 end);
@@ -1460,8 +1490,341 @@ function auctionator_AuctionFrameBrowse_Update ()
 end
 
 -----------------------------------------
+-- Full Scan Minimization & Floating HUD
+-----------------------------------------
+
+gAtr_ScanIsMinimized = false;
+local gAtr_OrigAuctionFrameUIPanel = nil;
+local gAtr_OrigAuctionFramePoints = nil;
+local gAtr_OrigAuctionFrameOnHide = nil;
+local gAtr_OrigAuxFramePoints = nil;
+local gAtr_OrigAuxFrameOnHide = nil;
+local gAtr_ScanMiniBar = nil;
+
+function Atr_CreateScanMiniBar()
+	if (gAtr_ScanMiniBar) then return gAtr_ScanMiniBar; end
+
+	local bar = CreateFrame("Button", "Atr_ScanMiniBar", UIParent);
+	bar:SetWidth(350);
+	bar:SetHeight(46);
+	bar:SetFrameStrata("FULLSCREEN_DIALOG");
+	bar:SetToplevel(true);
+	bar:EnableMouse(true);
+	bar:SetMovable(true);
+	bar:SetClampedToScreen(true);
+	bar:RegisterForDrag("LeftButton");
+	bar:SetScript("OnDragStart", function() this:StartMoving(); end);
+	bar:SetScript("OnDragStop", function()
+		this:StopMovingOrSizing();
+		local point, _, relPoint, xOfs, yOfs = this:GetPoint(1);
+		AUCTIONATOR_MINIBAR_POS = { point = point, relPoint = relPoint, x = xOfs, y = yOfs };
+	end);
+
+	if (AUCTIONATOR_MINIBAR_POS and AUCTIONATOR_MINIBAR_POS.point) then
+		bar:ClearAllPoints();
+		bar:SetPoint(AUCTIONATOR_MINIBAR_POS.point, UIParent, AUCTIONATOR_MINIBAR_POS.relPoint or AUCTIONATOR_MINIBAR_POS.point, AUCTIONATOR_MINIBAR_POS.x or 0, AUCTIONATOR_MINIBAR_POS.y or -32);
+	else
+		bar:ClearAllPoints();
+		bar:SetPoint("TOP", UIParent, "TOP", 0, -32);
+	end
+
+	-- Backdrop styling
+	bar:SetBackdrop({
+		bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+		edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+		tile = true, tileSize = 16, edgeSize = 14,
+		insets = { left = 4, right = 4, top = 4, bottom = 4 }
+	});
+	bar:SetBackdropColor(0.06, 0.06, 0.10, 0.94);
+	bar:SetBackdropBorderColor(1.0, 0.82, 0.0, 0.95);
+
+	-- Title
+	local title = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall");
+	title:SetPoint("TOPLEFT", bar, "TOPLEFT", 10, -8);
+	title:SetText("|cffffd100[AH Scan]|r");
+	bar.title = title;
+
+	-- Status / Progress Text
+	local status = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall");
+	status:SetPoint("LEFT", title, "RIGHT", 8, 0);
+	status:SetPoint("RIGHT", bar, "RIGHT", -26, 0);
+	status:SetJustifyH("LEFT");
+	status:SetText("Scanning...");
+	bar.status = status;
+
+	-- Progress Bar
+	local pbar = CreateFrame("StatusBar", "Atr_ScanMiniProgressBar", bar);
+	pbar:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", 10, 8);
+	pbar:SetWidth(195);
+	pbar:SetHeight(13);
+	pbar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar");
+	pbar:SetStatusBarColor(0.2, 0.7, 1.0, 0.95);
+	pbar:SetMinMaxValues(0, 100);
+	pbar:SetValue(0);
+
+	local pbarBg = pbar:CreateTexture(nil, "BACKGROUND");
+	pbarBg:SetAllPoints();
+	pbarBg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar");
+	pbarBg:SetVertexColor(0.1, 0.1, 0.15, 0.7);
+
+	local pbarText = pbar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall");
+	pbarText:SetPoint("CENTER", pbar, "CENTER", 0, 0);
+	pbarText:SetText("0%");
+	bar.pbarText = pbarText;
+	bar.pbar = pbar;
+
+	-- Pause / Resume Button
+	local pauseBtn = CreateFrame("Button", "Atr_ScanMiniPauseButton", bar, "UIPanelButtonTemplate");
+	pauseBtn:SetWidth(60);
+	pauseBtn:SetHeight(19);
+	pauseBtn:SetPoint("LEFT", pbar, "RIGHT", 6, 0);
+	pauseBtn:SetText("Pause");
+	local pFont = pauseBtn:GetFontString();
+	if (pFont and GameFontHighlightSmall and GameFontHighlightSmall.GetFont) then
+		local fontName = GameFontHighlightSmall:GetFont();
+		if (fontName) then pFont:SetFont(fontName, 10); end
+	end
+	pauseBtn:SetScript("OnClick", function()
+		if (gAtr_FullScanState == ATR_FS_STARTED) then
+			Atr_FullScanPause();
+		elseif (gAtr_FullScanState == ATR_FS_PAUSED) then
+			Atr_FullScanStart(true);
+		end
+		Atr_UpdateScanMiniBar();
+	end);
+	bar.pauseBtn = pauseBtn;
+
+	-- Expand / Maximize Button
+	local expandBtn = CreateFrame("Button", "Atr_ScanMiniExpandButton", bar, "UIPanelButtonTemplate");
+	expandBtn:SetWidth(58);
+	expandBtn:SetHeight(19);
+	expandBtn:SetPoint("LEFT", pauseBtn, "RIGHT", 4, 0);
+	expandBtn:SetText("Expand");
+	local eFont = expandBtn:GetFontString();
+	if (eFont and GameFontHighlightSmall and GameFontHighlightSmall.GetFont) then
+		local fontName = GameFontHighlightSmall:GetFont();
+		if (fontName) then eFont:SetFont(fontName, 10); end
+	end
+	expandBtn:SetScript("OnClick", function()
+		Atr_RestoreScan();
+	end);
+	bar.expandBtn = expandBtn;
+
+	-- Close Button (X in top right)
+	local closeBtn = CreateFrame("Button", "Atr_ScanMiniCloseButton", bar, "UIPanelCloseButton");
+	closeBtn:SetWidth(18);
+	closeBtn:SetHeight(18);
+	closeBtn:SetPoint("TOPRIGHT", bar, "TOPRIGHT", -2, -2);
+	closeBtn:SetScript("OnClick", function()
+		if (gAtr_FullScanState == ATR_FS_STARTED or gAtr_FullScanState == ATR_FS_PAUSED) then
+			Atr_FullScanPause();
+		end
+		Atr_RestoreScan();
+	end);
+	bar.closeBtn = closeBtn;
+
+	bar:Hide();
+	gAtr_ScanMiniBar = bar;
+	return bar;
+end
+
+function Atr_ShowScanMiniBar()
+	local bar = Atr_CreateScanMiniBar();
+	bar:Show();
+	Atr_UpdateScanMiniBar();
+end
+
+function Atr_UpdateScanMiniBar()
+	if (not gAtr_ScanMiniBar or not gAtr_ScanMiniBar:IsShown()) then return; end
+
+	local totalPages = gFS_pages or 0;
+	local curPage = gFS_page or 0;
+	local pct = 0;
+	if (totalPages > 0) then
+		pct = math.min(100, math.floor((curPage / totalPages) * 100));
+	end
+
+	gAtr_ScanMiniBar.pbar:SetValue(pct);
+	gAtr_ScanMiniBar.pbarText:SetText(string.format("%d%%", pct));
+
+	local elapsed = GetTime() - (gFS_startedAt or GetTime());
+	local secPerPage = (curPage > 0) and (elapsed / curPage) or 4.0;
+	local etaMin = (totalPages > curPage) and math.ceil(((totalPages - curPage) * secPerPage) / 60) or 0;
+	local flips = (gAtr_LiveScanDeals and table.getn(gAtr_LiveScanDeals)) or 0;
+	local flipNotice = (flips > 0) and string.format(" | |cffa335ee%d Flips|r", flips) or "";
+
+	if (gAtr_FullScanState == ATR_FS_STARTED) then
+		gAtr_ScanMiniBar.status:SetText(string.format("Page %d/%d (~%dm)%s", curPage, totalPages, etaMin, flipNotice));
+		gAtr_ScanMiniBar.pauseBtn:SetText("Pause");
+		gAtr_ScanMiniBar.pauseBtn:Enable();
+		gAtr_ScanMiniBar.pbar:SetStatusBarColor(0.2, 0.7, 1.0, 0.95);
+	elseif (gAtr_FullScanState == ATR_FS_PAUSED) then
+		gAtr_ScanMiniBar.status:SetText(string.format("|cffffcc00Paused (p.%d/%d)|r", curPage, totalPages));
+		gAtr_ScanMiniBar.pauseBtn:SetText("Resume");
+		gAtr_ScanMiniBar.pauseBtn:Enable();
+		gAtr_ScanMiniBar.pbar:SetStatusBarColor(1.0, 0.8, 0.2, 0.95);
+	elseif (gAtr_FullScanState == ATR_FS_ANALYZING) then
+		gAtr_ScanMiniBar.status:SetText("|cff00ff00Processing prices...|r");
+		gAtr_ScanMiniBar.pauseBtn:Disable();
+		gAtr_ScanMiniBar.pbar:SetStatusBarColor(0.2, 1.0, 0.4, 0.95);
+	elseif (gAtr_FullScanState == ATR_FS_NULL and curPage > 0 and curPage >= totalPages) then
+		gAtr_ScanMiniBar.status:SetText("|cff00ff00Scan complete!|r Click Expand");
+		gAtr_ScanMiniBar.pbar:SetValue(100);
+		gAtr_ScanMiniBar.pbarText:SetText("100%");
+		gAtr_ScanMiniBar.pauseBtn:SetText("Done");
+		gAtr_ScanMiniBar.pbar:SetStatusBarColor(0.2, 1.0, 0.4, 0.95);
+	else
+		gAtr_ScanMiniBar.status:SetText("Scan Idle");
+		gAtr_ScanMiniBar.pauseBtn:SetText("Start");
+		gAtr_ScanMiniBar.pbar:SetStatusBarColor(0.5, 0.5, 0.5, 0.95);
+	end
+end
+
+function Atr_MinimizeScan()
+	if (gAtr_ScanIsMinimized) then return; end
+	gAtr_ScanIsMinimized = true;
+
+	if (PlaySound) then PlaySound("igMiniMapZoomIn"); end
+
+	-- 1. Hide the full scan dialog & mask
+	if (Atr_FullScanFrame) then Atr_FullScanFrame:Hide(); end
+	if (Atr_Mask) then Atr_Mask:Hide(); end
+	if (Atr_ProfitFrame and Atr_ProfitFrame:IsShown()) then Atr_ProfitFrame:Hide(); end
+
+	-- 2. Preserve & detach AuctionFrame from UIPanelWindows so crafting frames can open freely
+	if (AuctionFrame and AuctionFrame:IsShown()) then
+		if (UIPanelWindows and UIPanelWindows["AuctionFrame"]) then
+			gAtr_OrigAuctionFrameUIPanel = UIPanelWindows["AuctionFrame"];
+			UIPanelWindows["AuctionFrame"] = nil;
+		end
+
+		gAtr_OrigAuctionFrameOnHide = AuctionFrame:GetScript("OnHide");
+		AuctionFrame:SetScript("OnHide", nil);
+
+		gAtr_OrigAuctionFramePoints = {};
+		local numPoints = AuctionFrame:GetNumPoints() or 0;
+		for i = 1, numPoints do
+			local point, relativeTo, relativePoint, xOfs, yOfs = AuctionFrame:GetPoint(i);
+			table.insert(gAtr_OrigAuctionFramePoints, { point = point, relativeTo = relativeTo, relativePoint = relativePoint, xOfs = xOfs, yOfs = yOfs });
+		end
+
+		AuctionFrame:ClearAllPoints();
+		AuctionFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -6000, -6000);
+		AuctionFrame:SetAlpha(0);
+		AuctionFrame:EnableMouse(false);
+	end
+
+	-- Also handle aux-addon frame if active
+	local auxFrame = getglobal("aux_frame");
+	if (auxFrame and auxFrame:IsShown()) then
+		gAtr_OrigAuxFrameOnHide = auxFrame:GetScript("OnHide");
+		auxFrame:SetScript("OnHide", nil);
+
+		gAtr_OrigAuxFramePoints = {};
+		local numPoints = auxFrame:GetNumPoints() or 0;
+		for i = 1, numPoints do
+			local point, relativeTo, relativePoint, xOfs, yOfs = auxFrame:GetPoint(i);
+			table.insert(gAtr_OrigAuxFramePoints, { point = point, relativeTo = relativeTo, relativePoint = relativePoint, xOfs = xOfs, yOfs = yOfs });
+		end
+
+		auxFrame:ClearAllPoints();
+		auxFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -6000, -6000);
+		auxFrame:SetAlpha(0);
+		auxFrame:EnableMouse(false);
+	end
+
+	-- 3. Show Mini-Bar HUD
+	Atr_ShowScanMiniBar();
+
+	if (DEFAULT_CHAT_FRAME) then
+		DEFAULT_CHAT_FRAME:AddMessage("|cff00ffff[Auctionator]|r Scan minimized to floating HUD. Screen cleared for crafting and inventory!");
+	end
+end
+
+function Atr_RestoreScan()
+	if (not gAtr_ScanIsMinimized) then return; end
+	gAtr_ScanIsMinimized = false;
+
+	if (PlaySound) then PlaySound("igMiniMapZoomOut"); end
+
+	-- 1. Restore UIPanelWindows registration
+	if (UIPanelWindows) then
+		if (gAtr_OrigAuctionFrameUIPanel) then
+			UIPanelWindows["AuctionFrame"] = gAtr_OrigAuctionFrameUIPanel;
+			gAtr_OrigAuctionFrameUIPanel = nil;
+		else
+			UIPanelWindows["AuctionFrame"] = { area = "doublewide", pushable = 0 };
+		end
+	end
+
+	-- 2. Restore AuctionFrame position & visibility
+	if (AuctionFrame and AuctionFrame:IsShown()) then
+		AuctionFrame:ClearAllPoints();
+		if (gAtr_OrigAuctionFramePoints and table.getn(gAtr_OrigAuctionFramePoints) > 0) then
+			for _, pt in ipairs(gAtr_OrigAuctionFramePoints) do
+				AuctionFrame:SetPoint(pt.point, pt.relativeTo, pt.relativePoint, pt.xOfs, pt.yOfs);
+			end
+		else
+			AuctionFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, -104);
+		end
+		AuctionFrame:SetAlpha(1);
+		AuctionFrame:EnableMouse(true);
+		if (gAtr_OrigAuctionFrameOnHide) then
+			AuctionFrame:SetScript("OnHide", gAtr_OrigAuctionFrameOnHide);
+			gAtr_OrigAuctionFrameOnHide = nil;
+		end
+	end
+
+	-- Restore aux_frame if needed
+	local auxFrame = getglobal("aux_frame");
+	if (auxFrame and auxFrame:IsShown()) then
+		auxFrame:ClearAllPoints();
+		if (gAtr_OrigAuxFramePoints and table.getn(gAtr_OrigAuxFramePoints) > 0) then
+			for _, pt in ipairs(gAtr_OrigAuxFramePoints) do
+				auxFrame:SetPoint(pt.point, pt.relativeTo, pt.relativePoint, pt.xOfs, pt.yOfs);
+			end
+		else
+			auxFrame:SetPoint("LEFT", 100, 0);
+		end
+		auxFrame:SetAlpha(1);
+		auxFrame:EnableMouse(true);
+		if (gAtr_OrigAuxFrameOnHide) then
+			auxFrame:SetScript("OnHide", gAtr_OrigAuxFrameOnHide);
+			gAtr_OrigAuxFrameOnHide = nil;
+		end
+	end
+
+	-- 3. Hide Mini-Bar HUD
+	if (gAtr_ScanMiniBar) then
+		gAtr_ScanMiniBar:Hide();
+	end
+
+	-- 4. Re-show FullScan dialog & mask
+	if (Atr_FullScanFrame) then
+		Atr_FullScanFrame:Show();
+		Atr_UpdateFullScanFrame();
+	end
+end
+
+function Atr_ToggleMinimizeScan()
+	if (gAtr_ScanIsMinimized) then
+		Atr_RestoreScan();
+	else
+		if (gAtr_FullScanState == ATR_FS_NULL) then
+			Atr_FullScanStart(false);
+		end
+		Atr_MinimizeScan();
+	end
+end
+
+-----------------------------------------
 
 function Atr_ShowFullScanFrame()
+
+	if (gAtr_ScanIsMinimized) then
+		Atr_RestoreScan();
+		return;
+	end
 
 	Atr_FullScanHTML:Show();
 	Atr_FullScanResults:Hide();
@@ -1557,6 +1920,60 @@ function Atr_UpdateFullScanFrame()
 		end);
 	end
 
+	local minTitleBtn = getglobal("Atr_FullScanMinTitleButton");
+	if (not minTitleBtn and Atr_FullScanFrame) then
+		minTitleBtn = CreateFrame("Button", "Atr_FullScanMinTitleButton", Atr_FullScanFrame, "UIPanelButtonTemplate");
+		minTitleBtn:SetWidth(20);
+		minTitleBtn:SetHeight(20);
+		minTitleBtn:SetPoint("TOPRIGHT", Atr_FullScanFrame, "TOPRIGHT", -12, -12);
+		minTitleBtn:SetText("_");
+		minTitleBtn:SetScript("OnClick", function()
+			Atr_MinimizeScan();
+		end);
+		minTitleBtn:SetScript("OnEnter", function()
+			GameTooltip:SetOwner(this, "ANCHOR_RIGHT");
+			GameTooltip:SetText("Minimize Scan", 1, 1, 1);
+			GameTooltip:AddLine("Minimizes the scan to a small floating HUD bar.", 0.8, 0.8, 0.8, 1);
+			GameTooltip:AddLine("Allows crafting, opening bags, and moving freely while scan continues in the background.", 0, 1, 0, 1);
+			GameTooltip:Show();
+		end);
+		minTitleBtn:SetScript("OnLeave", function()
+			GameTooltip:Hide();
+		end);
+	end
+
+	local minBtn = getglobal("Atr_FullScanMinimizeButton");
+	if (not minBtn and Atr_FullScanFrame and Atr_FullScanStartButton) then
+		minBtn = CreateFrame("Button", "Atr_FullScanMinimizeButton", Atr_FullScanFrame, "UIPanelButtonTemplate");
+		minBtn:SetWidth(85);
+		minBtn:SetHeight(22);
+		minBtn:SetText("Minimize");
+		minBtn:SetScript("OnClick", function()
+			if (gAtr_FullScanState == ATR_FS_NULL) then
+				Atr_FullScanStart(false);
+			end
+			Atr_MinimizeScan();
+		end);
+		minBtn:SetScript("OnEnter", function()
+			GameTooltip:SetOwner(this, "ANCHOR_TOP");
+			GameTooltip:SetText("Minimize Scan to HUD", 1, 1, 1);
+			GameTooltip:AddLine("Shrinks the scan to a compact progress bar so you can craft items, manage inventory, and interact with the game while the Auction House is scanned.", 0.8, 0.8, 0.8, 1);
+			GameTooltip:Show();
+		end);
+		minBtn:SetScript("OnLeave", function()
+			GameTooltip:Hide();
+		end);
+	end
+
+	if (minBtn) then
+		minBtn:ClearAllPoints();
+		if (restartBtn and restartBtn:IsShown()) then
+			minBtn:SetPoint("RIGHT", restartBtn, "LEFT", -4, 0);
+		elseif (Atr_FullScanStartButton) then
+			minBtn:SetPoint("RIGHT", Atr_FullScanStartButton, "LEFT", -4, 0);
+		end
+	end
+
 	if (gAtr_FullScanState == ATR_FS_STARTED) then
 		Atr_FullScanStartButton:SetText("Pause Scan");
 		Atr_FullScanStartButton:Enable();
@@ -1577,6 +1994,11 @@ end
 function Atr_FullScanFrameIdle()
 
 	local now = GetTime();
+
+	if (gAtr_ScanIsMinimized and (now - (gFS_lastMiniBarRefresh or 0) >= 0.5)) then
+		gFS_lastMiniBarRefresh = now;
+		Atr_UpdateScanMiniBar();
+	end
 
 	-- Anti-Disconnect / Anti-AFK Keepalive: prevents server AFK and client idle timeout during scan or paused scan
 	if (gAtr_FullScanState == ATR_FS_STARTED or gAtr_FullScanState == ATR_FS_PAUSED) then
@@ -1602,7 +2024,8 @@ function Atr_FullScanFrameIdle()
 
 	if (gAtr_FullScanState == ATR_FS_STARTED) then
 
-		if (not AuctionFrame or not AuctionFrame:IsShown()) then
+		local isAHOpen = (AuctionFrame and AuctionFrame:IsShown()) or (aux_frame and aux_frame:IsShown()) or gAtr_ScanIsMinimized;
+		if (not isAHOpen) then
 			Atr_FullScanPause();
 			return;
 		end
