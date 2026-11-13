@@ -1360,10 +1360,10 @@ local function BuildUI()
         UpdateDressingRoom()
     end)
 
-    if OctoBiSPlannerDB and OctoBiSPlannerDB.show3DModel == false then
-        dressingFrame:Hide()
-    else
+    if OctoBiSPlannerDB and OctoBiSPlannerDB.show3DModel == true then
         dressingFrame:Show()
+    else
+        dressingFrame:Hide()
     end
 
     -- Title Bar (Modern Sleek Smoked Header)
