@@ -6768,6 +6768,9 @@ local function InitWarriorCombatHUD()
         bsIcon:Show()
 
         local now = GetTime()
+        -- Smooth breathing pulse: light oscillates on and off every ~1.65s
+        local pulse = (math.sin(now * 3.8) + 1) * 0.5
+        local pulseAlpha = 0.08 + (pulse * 0.82) -- Fades smoothly from 0.08 (off) to 0.90 (lit)
 
         -- 1. Sunder Armor (only visible when present on target)
         local sName, sApps, sDur, sRem = ScanAura("target", "Sunder", "HARMFUL")
@@ -6864,12 +6867,12 @@ local function InitWarriorCombatHUD()
             demoIcon.timerText:SetText(demoRem > 0 and string.format("%d", math.ceil(demoRem)) or "")
             demoIcon.stackText:SetText("")
         elseif UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") and UnitAffectingCombat("player") then
-            -- Missing reminder in combat: Dimmed yellow light reminder (no red !)
+            -- Missing reminder in combat: Dark icon with pulsing yellow light going on & off!
             demoIcon:Show()
-            demoIcon.icon:SetAlpha(0.35)
-            demoIcon.icon:SetVertexColor(0.65, 0.65, 0.65)
+            demoIcon.icon:SetAlpha(0.22)
+            demoIcon.icon:SetVertexColor(0.40, 0.40, 0.45)
             demoIcon.icon:Show()
-            demoIcon:SetBackdropBorderColor(0.85, 0.70, 0.20, 0.55) -- Dimmed yellow ambient light
+            demoIcon:SetBackdropBorderColor(1.0, 0.80, 0.15, pulseAlpha) -- Pulsing light on/off
             demoIcon.timerText:SetText("")
             demoIcon.stackText:SetText("")
         else
@@ -6887,12 +6890,12 @@ local function InitWarriorCombatHUD()
             tcIcon.timerText:SetText(tcRem > 0 and string.format("%d", math.ceil(tcRem)) or "")
             tcIcon.stackText:SetText("")
         elseif UnitExists("target") and UnitCanAttack("player", "target") and not UnitIsDead("target") and UnitAffectingCombat("player") then
-            -- Missing reminder in combat: Dimmed yellow light reminder (no red !)
+            -- Missing reminder in combat: Dark icon with pulsing yellow light going on & off!
             tcIcon:Show()
-            tcIcon.icon:SetAlpha(0.35)
-            tcIcon.icon:SetVertexColor(0.65, 0.65, 0.65)
+            tcIcon.icon:SetAlpha(0.22)
+            tcIcon.icon:SetVertexColor(0.40, 0.40, 0.45)
             tcIcon.icon:Show()
-            tcIcon:SetBackdropBorderColor(0.85, 0.70, 0.20, 0.55) -- Dimmed yellow ambient light
+            tcIcon:SetBackdropBorderColor(1.0, 0.80, 0.15, pulseAlpha) -- Pulsing light on/off
             tcIcon.timerText:SetText("")
             tcIcon.stackText:SetText("")
         else
@@ -6913,10 +6916,10 @@ local function InitWarriorCombatHUD()
                 bsIcon.timerText:SetText("")
             end
         else
-            -- Battle Shout MISSING reminder: Dimmed with soft yellow light (no red !)
-            bsIcon.icon:SetAlpha(0.35)
-            bsIcon.icon:SetVertexColor(0.65, 0.65, 0.65)
-            bsIcon:SetBackdropBorderColor(0.85, 0.70, 0.20, 0.55) -- Dimmed yellow ambient light
+            -- Battle Shout MISSING reminder: Dark icon with pulsing yellow light going on & off!
+            bsIcon.icon:SetAlpha(0.22)
+            bsIcon.icon:SetVertexColor(0.40, 0.40, 0.45)
+            bsIcon:SetBackdropBorderColor(1.0, 0.80, 0.15, pulseAlpha) -- Pulsing light on/off
             bsIcon.timerText:SetText("")
         end
 
@@ -6985,11 +6988,11 @@ local function InitWarriorCombatHUD()
                 sbBuffIcon.stackText:SetText("")
             end
         elseif inCombat or hasShield or isUnlocked then
-            -- NO BUFF: Dimmed down with a gentle, soft ambient light around it so it doesn't bother you!
+            -- NO BUFF: Dark icon with pulsing yellow light going on & off!
             sbBuffIcon:Show()
             sbBuffIcon.icon:SetAlpha(0.22)
             sbBuffIcon.icon:SetVertexColor(0.40, 0.40, 0.45)
-            sbBuffIcon:SetBackdropBorderColor(0.85, 0.70, 0.20, 0.55) -- Dimmed yellow ambient light
+            sbBuffIcon:SetBackdropBorderColor(1.0, 0.80, 0.15, pulseAlpha) -- Pulsing light on/off
             sbBuffIcon.timerText:SetText("")
             sbBuffIcon.stackText:SetText("")
         else
