@@ -475,34 +475,25 @@ local SortButtonRef = nil
 
 local function GetEffectiveLevel(item)
     if not item then return 0 end
-    if item.effLevel and item.effLevel > 0 then
+    if item.effLevel and type(item.effLevel) == "number" and item.effLevel > 0 then
         return item.effLevel
     end
-    if item.reqLevel and item.reqLevel > 0 then
+    if item.reqLevel and type(item.reqLevel) == "number" and item.reqLevel > 0 then
         item.effLevel = item.reqLevel
         return item.reqLevel
     end
-    local gName, _, gQual, gLevel, gMinLevel = GetItemInfo(item.id)
-    if gMinLevel and gMinLevel > 0 then
+    -- In WoW 1.12.1 (Vanilla): GetItemInfo returns:
+    -- 1:name, 2:link, 3:rarity, 4:minLevel (number), 5:type (string), 6:subType (string), 7:stackCount, 8:equipLoc, 9:texture
+    local gName, _, gQual, gMinLevel, _, _, _, _, gTex = GetItemInfo(item.id)
+    if gMinLevel and type(gMinLevel) == "number" and gMinLevel > 0 then
         item.reqLevel = gMinLevel
-        item.itemLevel = gLevel or gMinLevel
         item.effLevel = gMinLevel
         return gMinLevel
     end
-    if item.sourceMinLvl and item.sourceMinLvl > 0 then
-        item.effLevel = item.sourceMinLvl
-        return item.sourceMinLvl
-    end
-    if item.itemLevel and item.itemLevel > 0 then
-        local est = math.max(1, item.itemLevel - 5)
-        item.effLevel = est
-        return est
-    end
-    if gLevel and gLevel > 0 then
-        item.itemLevel = gLevel
-        local est = math.max(1, gLevel - 5)
-        item.effLevel = est
-        return est
+    local sMin = tonumber(item.sourceMinLvl) or 0
+    if sMin > 0 then
+        item.effLevel = sMin
+        return sMin
     end
     item.effLevel = 0
     return 0
@@ -510,24 +501,27 @@ end
 
 local function MatchesLevelFilter(effLvl, item, filter)
     if filter == "ALL" then return true end
+    local eff = tonumber(effLvl) or 0
+    local sMin = tonumber(item and item.sourceMinLvl) or 0
+    local sMax = tonumber(item and item.sourceMaxLvl) or 0
+    local req = tonumber(item and item.reqLevel) or 0
+
     if filter == "40+" then
-        if effLvl >= 40 then return true end
-        if item.itemLevel and item.itemLevel >= 40 then return true end
-        if item.sourceMinLvl and item.sourceMinLvl >= 38 then return true end
-        if effLvl == 0 then return true end -- allow uncached items from AtlasLoot
+        if eff >= 40 or req >= 40 then return true end
+        if sMin >= 38 then return true end
+        if eff == 0 and req == 0 then return true end -- allow uncached items from AtlasLoot
         return false
     elseif filter == "40-49" then
-        if effLvl >= 40 and effLvl <= 49 then return true end
-        if (effLvl == 0 or effLvl < 40) and item.sourceMinLvl and item.sourceMinLvl >= 38 and item.sourceMinLvl <= 49 then return true end
+        if (eff >= 40 and eff <= 49) or (req >= 40 and req <= 49) then return true end
+        if sMin >= 38 and sMin <= 49 then return true end
         return false
     elseif filter == "50-59" then
-        if effLvl >= 50 and effLvl <= 59 then return true end
-        if (effLvl == 0 or effLvl < 50) and item.sourceMinLvl and item.sourceMinLvl >= 50 and item.sourceMinLvl <= 59 then return true end
+        if (eff >= 50 and eff <= 59) or (req >= 50 and req <= 59) then return true end
+        if sMin >= 50 and sMin <= 59 then return true end
         return false
     elseif filter == "60" then
-        if effLvl >= 60 then return true end
-        if item.sourceMinLvl and item.sourceMinLvl >= 58 then return true end
-        if item.itemLevel and item.itemLevel >= 60 then return true end
+        if eff >= 60 or req >= 60 then return true end
+        if sMin >= 58 or sMax >= 60 then return true end
         return false
     end
     return true
@@ -749,25 +743,27 @@ local function UpdateBrowserList()
 
                 -- Lazy cache update from GetItemInfo if item was generic
                 if string.find(item.name or "", "^Item #") then
-                    local gName, _, gQual, gLvl, gMinLvl, _, _, _, _, gTex = GetItemInfo(item.id)
+                    local gName, _, gQual, gMinLvl, _, _, _, _, gTex = GetItemInfo(item.id)
                     if gName and gName ~= "" then
                         item.name = gName
                         item.quality = gQual or item.quality
                         qc = QUALITY_COLORS[item.quality] or qc
-                        if gMinLvl and gMinLvl > 0 then item.reqLevel = gMinLvl end
-                        if gLvl and gLvl > 0 then item.itemLevel = gLvl end
+                        if gMinLvl and type(gMinLvl) == "number" and gMinLvl > 0 then
+                            item.reqLevel = gMinLvl
+                            item.effLevel = gMinLvl
+                        end
                         if gTex then item.icon = gTex; row.icon:SetTexture(gTex) end
                     end
                 end
 
                 local effLvl = item.effLevel or GetEffectiveLevel(item)
                 local lvlText = ""
-                if item.reqLevel and item.reqLevel > 0 then
-                    lvlText = string.format(" |cFFFFD100[Req %d]|r", item.reqLevel)
-                elseif item.itemLevel and item.itemLevel > 0 then
-                    lvlText = string.format(" |cFF88BBFF[iLvl %d]|r", item.itemLevel)
-                elseif effLvl > 0 then
-                    lvlText = string.format(" |cFFFFD100[Req %d]|r", effLvl)
+                local rLvl = tonumber(item.reqLevel) or 0
+                local eff = tonumber(effLvl) or 0
+                if rLvl > 0 then
+                    lvlText = string.format(" |cFFFFD100[Req %d]|r", rLvl)
+                elseif eff > 0 then
+                    lvlText = string.format(" |cFFFFD100[Req %d]|r", eff)
                 end
 
                 row.name:SetText((item.name or "Item") .. lvlText)
@@ -1354,7 +1350,7 @@ local function BuildUI()
                     if itemLink then
                         local _, _, itemID = string.find(itemLink, "item:(%d+)")
                         if itemID then
-                            local name, _, quality, _, _, _, _, _, _, icon = GetItemInfo(itemID)
+                            local name, _, quality, _, _, _, _, _, icon = GetItemInfo(itemID)
                             EquippedGear[s.name] = {
                                 id = tonumber(itemID),
                                 name = name or "Equipped Item",
