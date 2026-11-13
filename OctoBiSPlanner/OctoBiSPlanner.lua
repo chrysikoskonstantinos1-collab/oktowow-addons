@@ -266,13 +266,13 @@ local function IndexAtlasLootData()
 
     local seenItems = {}
 
-    local function ParseEntry(v, sourceName)
+    local function ParseEntry(v, cleanSource, sourceMinLvl, sourceMaxLvl)
         if type(v) ~= "table" then return end
 
         -- If nested array: v[1] is a table, recursively parse (handles sets and crafting tables)
         if type(v[1]) == "table" then
             for _, subEntry in ipairs(v) do
-                ParseEntry(subEntry, sourceName)
+                ParseEntry(subEntry, cleanSource, sourceMinLvl, sourceMaxLvl)
             end
             return
         end
@@ -281,40 +281,43 @@ local function IndexAtlasLootData()
         if type(itemID) ~= "number" or itemID <= 0 then return end
         if seenItems[itemID] then return end
 
-        local rawDesc = ""
-        local rawName = ""
-        local icon = "INV_Misc_QuestionMark"
+        local rawDesc = (type(v[4]) == "string" and v[4]) or (type(v[2]) == "string" and v[2]) or ""
+        -- If rawDesc does not contain any slot or weapon tag, it is not equippable gear
+        if not string.find(rawDesc, "#") then return end
 
-        -- Support both 5-tuple {id, icon, name, desc, rate} and 2-tuple {id, desc}
-        if type(v[4]) == "string" and string.find(v[4], "#") then
-            rawDesc = v[4]
-            rawName = (type(v[3]) == "string" and v[3]) or ""
-            icon = (type(v[2]) == "string" and v[2]) or icon
-        elseif type(v[2]) == "string" and string.find(v[2], "#") then
-            rawDesc = v[2]
-            rawName = (type(v[3]) == "string" and v[3]) or ""
-            icon = (type(v[4]) == "string" and v[4]) or icon
-        else
-            rawDesc = (type(v[4]) == "string" and v[4]) or (type(v[2]) == "string" and v[2]) or ""
-            rawName = (type(v[3]) == "string" and v[3]) or ""
-            icon = (type(v[2]) == "string" and not string.find(v[2], "#") and v[2]) or icon
+        -- Fast slot match check
+        local sHead     = string.find(rawDesc, "#s1#")
+        local sNeck     = string.find(rawDesc, "#s2#")
+        local sShoulder = string.find(rawDesc, "#s3#")
+        local sBack     = string.find(rawDesc, "#s4#")
+        local sChest    = string.find(rawDesc, "#s5#")
+        local sShirt    = string.find(rawDesc, "#s6#")
+        local sTabard   = string.find(rawDesc, "#s7#")
+        local sWrist    = string.find(rawDesc, "#s8#")
+        local sHands    = string.find(rawDesc, "#s9#")
+        local sWaist    = string.find(rawDesc, "#s10#")
+        local sLegs     = string.find(rawDesc, "#s11#")
+        local sFeet     = string.find(rawDesc, "#s12#")
+        local sFinger   = string.find(rawDesc, "#s13#")
+        local sTrinket  = string.find(rawDesc, "#s14#")
+        local sMain     = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h2#") or string.find(rawDesc, "#h3#")
+        local sOff      = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h4#") or string.find(rawDesc, "#w8#") or string.find(rawDesc, "#s15#")
+        local sRanged   = string.find(rawDesc, "#s16#") or string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#")
+
+        if not (sHead or sNeck or sShoulder or sBack or sChest or sShirt or sTabard or sWrist or sHands or sWaist or sLegs or sFeet or sFinger or sTrinket or sMain or sOff or sRanged) then
+            return
         end
 
-        -- Extract Quality
+        local rawName = (type(v[3]) == "string" and v[3]) or ""
+        local icon = (type(v[2]) == "string" and not string.find(v[2], "#") and v[2]) or (type(v[4]) == "string" and not string.find(v[4], "#") and v[4]) or "INV_Misc_QuestionMark"
+
+        -- Extract Quality & Name
         local _, _, qStr = string.find(rawName, "=q(%d)=")
-        local quality = qStr and tonumber(qStr) or 1
+        local quality = (qStr and tonumber(qStr)) or 1
         local cleanName = string.gsub(rawName, "=q%d=", "")
         cleanName = string.gsub(cleanName, "=ds=", "")
-
         if cleanName == "" or cleanName == " " then
-            local gName, _, gQual, _, _, _, _, _, _, gTex = GetItemInfo(itemID)
-            if gName and gName ~= "" then
-                cleanName = gName
-                quality = gQual or quality
-                if gTex then icon = gTex end
-            else
-                cleanName = "Item #" .. itemID
-            end
+            cleanName = "Item #" .. itemID
         end
 
         -- Extract Armor Type
@@ -335,55 +338,12 @@ local function IndexAtlasLootData()
         elseif string.find(rawDesc, "#w8#") then weaponType = "Shield"
         elseif string.find(rawDesc, "#w9#") then weaponType = "Staff"
         elseif string.find(rawDesc, "#w13#") then weaponType = "Fist"
-        elseif string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#") then
-            weaponType = "Ranged"
+        elseif sRanged then weaponType = "Ranged"
         end
 
         local fullIcon = icon
         if type(fullIcon) == "string" and not string.find(fullIcon, "\\") then
             fullIcon = "Interface\\Icons\\" .. fullIcon
-        end
-
-        -- Source resolving
-        local sourceKey = sourceName or "AtlasLoot"
-        local sourceInfo = nil
-        if AtlasLoot_TableNames and type(sourceKey) == "string" then
-            sourceInfo = AtlasLoot_TableNames[sourceKey]
-            if not sourceInfo and string.find(sourceKey, "C$") then
-                sourceInfo = AtlasLoot_TableNames[string.gsub(sourceKey, "C$", "")]
-            end
-        end
-
-        local cleanSource = tostring(sourceKey)
-        local sourceMinLvl = nil
-        local sourceMaxLvl = nil
-
-        if sourceInfo then
-            local boss = sourceInfo[1] or ""
-            local zone = sourceInfo[3] or sourceInfo[2] or ""
-            boss = string.gsub(boss, "|c%x%x%x%x%x%x%x%x", "")
-            boss = string.gsub(boss, "|r", "")
-            zone = string.gsub(zone, "|c%x%x%x%x%x%x%x%x", "")
-            zone = string.gsub(zone, "|r", "")
-
-            local _, _, minL, maxL = string.find(zone, "%[(%d+)%-(%d+)%]")
-            if minL and maxL then
-                sourceMinLvl = tonumber(minL)
-                sourceMaxLvl = tonumber(maxL)
-            elseif string.find(zone, "%[RAID%]") then
-                sourceMinLvl = 60
-                sourceMaxLvl = 60
-            end
-
-            if boss ~= "" and zone ~= "" then
-                cleanSource = zone .. " (" .. boss .. ")"
-            elseif boss ~= "" then
-                cleanSource = boss
-            elseif zone ~= "" then
-                cleanSource = zone
-            end
-        elseif AtlasLoot_Data and AtlasLoot_Data["AtlasLootSources"] and AtlasLoot_Data["AtlasLootSources"][itemID] then
-            cleanSource = AtlasLoot_Data["AtlasLootSources"][itemID]
         end
 
         local itemObj = {
@@ -403,32 +363,24 @@ local function IndexAtlasLootData()
 
         seenItems[itemID] = true
 
-        -- Map to slots
-        if string.find(rawDesc, "#s1#") or gEquipLoc == "INVTYPE_HEAD" then table.insert(ItemDatabase.HEAD, itemObj) end
-        if string.find(rawDesc, "#s2#") or gEquipLoc == "INVTYPE_NECK" then table.insert(ItemDatabase.NECK, itemObj) end
-        if string.find(rawDesc, "#s3#") or gEquipLoc == "INVTYPE_SHOULDER" then table.insert(ItemDatabase.SHOULDER, itemObj) end
-        if string.find(rawDesc, "#s4#") or gEquipLoc == "INVTYPE_CLOAK" then table.insert(ItemDatabase.BACK, itemObj) end
-        if string.find(rawDesc, "#s5#") or gEquipLoc == "INVTYPE_CHEST" or gEquipLoc == "INVTYPE_ROBE" then table.insert(ItemDatabase.CHEST, itemObj) end
-        if string.find(rawDesc, "#s6#") or gEquipLoc == "INVTYPE_BODY" then table.insert(ItemDatabase.SHIRT, itemObj) end
-        if string.find(rawDesc, "#s7#") or gEquipLoc == "INVTYPE_TABARD" then table.insert(ItemDatabase.TABARD, itemObj) end
-        if string.find(rawDesc, "#s8#") or gEquipLoc == "INVTYPE_WRIST" then table.insert(ItemDatabase.WRIST, itemObj) end
-        if string.find(rawDesc, "#s9#") or gEquipLoc == "INVTYPE_HAND" then table.insert(ItemDatabase.HANDS, itemObj) end
-        if string.find(rawDesc, "#s10#") or gEquipLoc == "INVTYPE_WAIST" then table.insert(ItemDatabase.WAIST, itemObj) end
-        if string.find(rawDesc, "#s11#") or gEquipLoc == "INVTYPE_LEGS" then table.insert(ItemDatabase.LEGS, itemObj) end
-        if string.find(rawDesc, "#s12#") or gEquipLoc == "INVTYPE_FEET" then table.insert(ItemDatabase.FEET, itemObj) end
-        if string.find(rawDesc, "#s13#") or gEquipLoc == "INVTYPE_FINGER" then table.insert(ItemDatabase.FINGER, itemObj) end
-        if string.find(rawDesc, "#s14#") or gEquipLoc == "INVTYPE_TRINKET" then table.insert(ItemDatabase.TRINKET, itemObj) end
-
-        -- Weapons & Off-hands & Ranged
-        if string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h2#") or string.find(rawDesc, "#h3#") or gEquipLoc == "INVTYPE_WEAPON" or gEquipLoc == "INVTYPE_2HWEAPON" or gEquipLoc == "INVTYPE_WEAPONMAINHAND" then
-            table.insert(ItemDatabase.MAINHAND, itemObj)
-        end
-        if string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h4#") or string.find(rawDesc, "#w8#") or string.find(rawDesc, "#s15#") or gEquipLoc == "INVTYPE_WEAPON" or gEquipLoc == "INVTYPE_WEAPONOFFHAND" or gEquipLoc == "INVTYPE_SHIELD" or gEquipLoc == "INVTYPE_HOLDABLE" then
-            table.insert(ItemDatabase.OFFHAND, itemObj)
-        end
-        if string.find(rawDesc, "#s16#") or string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#") or gEquipLoc == "INVTYPE_RANGED" or gEquipLoc == "INVTYPE_RANGEDRIGHT" or gEquipLoc == "INVTYPE_THROWN" or gEquipLoc == "INVTYPE_RELIC" then
-            table.insert(ItemDatabase.RANGED, itemObj)
-        end
+        -- Insert into matching database slots
+        if sHead then table.insert(ItemDatabase.HEAD, itemObj) end
+        if sNeck then table.insert(ItemDatabase.NECK, itemObj) end
+        if sShoulder then table.insert(ItemDatabase.SHOULDER, itemObj) end
+        if sBack then table.insert(ItemDatabase.BACK, itemObj) end
+        if sChest then table.insert(ItemDatabase.CHEST, itemObj) end
+        if sShirt then table.insert(ItemDatabase.SHIRT, itemObj) end
+        if sTabard then table.insert(ItemDatabase.TABARD, itemObj) end
+        if sWrist then table.insert(ItemDatabase.WRIST, itemObj) end
+        if sHands then table.insert(ItemDatabase.HANDS, itemObj) end
+        if sWaist then table.insert(ItemDatabase.WAIST, itemObj) end
+        if sLegs then table.insert(ItemDatabase.LEGS, itemObj) end
+        if sFeet then table.insert(ItemDatabase.FEET, itemObj) end
+        if sFinger then table.insert(ItemDatabase.FINGER, itemObj) end
+        if sTrinket then table.insert(ItemDatabase.TRINKET, itemObj) end
+        if sMain then table.insert(ItemDatabase.MAINHAND, itemObj) end
+        if sOff then table.insert(ItemDatabase.OFFHAND, itemObj) end
+        if sRanged then table.insert(ItemDatabase.RANGED, itemObj) end
     end
 
     local validTables = {
@@ -446,8 +398,53 @@ local function IndexAtlasLootData()
         if type(dataSource) == "table" then
             for dataID, data in pairs(dataSource) do
                 if type(data) == "table" then
-                    for _, v in ipairs(data) do
-                        ParseEntry(v, dataID)
+                    -- Resolve source title and level range ONCE per table
+                    local cleanSource = tostring(dataID)
+                    local sourceMinLvl = nil
+                    local sourceMaxLvl = nil
+
+                    local sourceInfo = nil
+                    if AtlasLoot_TableNames and type(dataID) == "string" then
+                        sourceInfo = AtlasLoot_TableNames[dataID] or AtlasLoot_TableNames[string.gsub(dataID, "C$", "")]
+                    end
+
+                    local skipTable = false
+                    if sourceInfo then
+                        local zone = sourceInfo[3] or sourceInfo[2] or ""
+                        local _, _, minL, maxL = string.find(zone, "%[(%d+)%-(%d+)%]")
+                        if minL and maxL then
+                            sourceMinLvl = tonumber(minL)
+                            sourceMaxLvl = tonumber(maxL)
+                            -- Skip entire sub-level 38 dungeons
+                            if sourceMaxLvl and sourceMaxLvl < 38 then
+                                skipTable = true
+                            end
+                        elseif string.find(zone, "%[RAID%]") then
+                            sourceMinLvl = 60
+                            sourceMaxLvl = 60
+                        end
+
+                        if not skipTable then
+                            local boss = sourceInfo[1] or ""
+                            boss = string.gsub(boss, "|c%x%x%x%x%x%x%x%x", "")
+                            boss = string.gsub(boss, "|r", "")
+                            zone = string.gsub(zone, "|c%x%x%x%x%x%x%x%x", "")
+                            zone = string.gsub(zone, "|r", "")
+
+                            if boss ~= "" and zone ~= "" then
+                                cleanSource = zone .. " (" .. boss .. ")"
+                            elseif boss ~= "" then
+                                cleanSource = boss
+                            elseif zone ~= "" then
+                                cleanSource = zone
+                            end
+                        end
+                    end
+
+                    if not skipTable then
+                        for _, v in ipairs(data) do
+                            ParseEntry(v, cleanSource, sourceMinLvl, sourceMaxLvl)
+                        end
                     end
                 end
             end
@@ -697,8 +694,8 @@ local function UpdateBrowserList()
         end
     end
 
-    -- Sort according to SortMode
-    table.sort(CurrentBrowserItems, function(a, b)
+    -- Sort according to SortMode safely
+    pcall(table.sort, CurrentBrowserItems, function(a, b)
         local effA = (a and a.effLevel) or 0
         local effB = (b and b.effLevel) or 0
         local qa = (a and a.quality) or 0
@@ -732,49 +729,57 @@ local function UpdateBrowserList()
     if BrowserPage > maxPage then BrowserPage = maxPage end
     if BrowserPage < 1 then BrowserPage = 1 end
 
-    Planner.pageText:SetText(string.format("Page %d / %d  (%d items)", BrowserPage, maxPage, total))
+    if Planner and Planner.pageText then
+        Planner.pageText:SetText(string.format("Page %d / %d  (%d items)", BrowserPage, maxPage, total))
+    end
 
     local startIndex = (BrowserPage - 1) * ROWS_PER_PAGE
     for i = 1, ROWS_PER_PAGE do
         local row = BrowserRows[i]
-        local item = CurrentBrowserItems[startIndex + i]
-        if item then
-            row.item = item
-            row.icon:SetTexture(item.icon)
-            local qc = QUALITY_COLORS[item.quality] or QUALITY_COLORS[1]
-
-            -- Lazy cache update from GetItemInfo if item was generic
-            if string.find(item.name, "^Item #") then
-                local gName, _, gQual, gLvl, gMinLvl, _, _, _, _, gTex = GetItemInfo(item.id)
-                if gName then
-                    item.name = gName
-                    item.quality = gQual or item.quality
-                    qc = QUALITY_COLORS[item.quality] or qc
-                    if gMinLvl and gMinLvl > 0 then item.reqLevel = gMinLvl end
-                    if gLvl and gLvl > 0 then item.itemLevel = gLvl end
-                    if gTex then item.icon = gTex; row.icon:SetTexture(gTex) end
+        if row then
+            local item = CurrentBrowserItems[startIndex + i]
+            if item then
+                row.item = item
+                if type(item.icon) == "string" and item.icon ~= "" then
+                    row.icon:SetTexture(item.icon)
+                else
+                    row.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
                 end
-            end
+                local qc = (item.quality and QUALITY_COLORS[item.quality]) or QUALITY_COLORS[1]
 
-            local effLvl = GetEffectiveLevel(item)
-            local lvlText = ""
-            if item.reqLevel and item.reqLevel > 0 then
-                lvlText = string.format(" |cFFFFD100[Req %d]|r", item.reqLevel)
-            elseif item.itemLevel and item.itemLevel > 0 then
-                lvlText = string.format(" |cFF88BBFF[iLvl %d]|r", item.itemLevel)
-            elseif effLvl > 0 then
-                lvlText = string.format(" |cFFFFD100[Req %d]|r", effLvl)
-            end
+                -- Lazy cache update from GetItemInfo if item was generic
+                if string.find(item.name or "", "^Item #") then
+                    local gName, _, gQual, gLvl, gMinLvl, _, _, _, _, gTex = GetItemInfo(item.id)
+                    if gName and gName ~= "" then
+                        item.name = gName
+                        item.quality = gQual or item.quality
+                        qc = QUALITY_COLORS[item.quality] or qc
+                        if gMinLvl and gMinLvl > 0 then item.reqLevel = gMinLvl end
+                        if gLvl and gLvl > 0 then item.itemLevel = gLvl end
+                        if gTex then item.icon = gTex; row.icon:SetTexture(gTex) end
+                    end
+                end
 
-            row.name:SetText(item.name .. lvlText)
-            row.name:SetTextColor(qc[1], qc[2], qc[3])
-            local typeStr = item.armorType or item.weaponType or "Item"
-            row.sub:SetText(string.format("|cFF999999%s • %s|r", typeStr, item.source))
-            row:SetBackdropBorderColor(qc[1], qc[2], qc[3], 0.7)
-            row:Show()
-        else
-            row.item = nil
-            row:Hide()
+                local effLvl = item.effLevel or GetEffectiveLevel(item)
+                local lvlText = ""
+                if item.reqLevel and item.reqLevel > 0 then
+                    lvlText = string.format(" |cFFFFD100[Req %d]|r", item.reqLevel)
+                elseif item.itemLevel and item.itemLevel > 0 then
+                    lvlText = string.format(" |cFF88BBFF[iLvl %d]|r", item.itemLevel)
+                elseif effLvl > 0 then
+                    lvlText = string.format(" |cFFFFD100[Req %d]|r", effLvl)
+                end
+
+                row.name:SetText((item.name or "Item") .. lvlText)
+                row.name:SetTextColor(qc[1], qc[2], qc[3])
+                local typeStr = item.armorType or item.weaponType or "Item"
+                row.sub:SetText(string.format("|cFF999999%s • %s|r", typeStr, item.source or "AtlasLoot"))
+                row:SetBackdropBorderColor(qc[1], qc[2], qc[3], 0.7)
+                row:Show()
+            else
+                row.item = nil
+                row:Hide()
+            end
         end
     end
 
@@ -784,13 +789,19 @@ end
 local function OpenSlotBrowser(slot)
     if not slot then return end
     ActiveSlot = slot
-    IndexAtlasLootData()
+    local ok, err = pcall(IndexAtlasLootData)
+    if not ok and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[OctoBiS Index Error]:|r " .. tostring(err))
+    end
     if Planner and Planner.browserTitle then
         Planner.browserTitle:SetText(string.format("Selecting: |cFFFFD100%s|r", slot.label or slot.name or "Slot"))
     end
     HighlightActiveSlot()
     BrowserPage = 1
-    UpdateBrowserList()
+    local uok, uerr = pcall(UpdateBrowserList)
+    if not uok and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cFFFF4444[OctoBiS Browser Error]:|r " .. tostring(uerr))
+    end
     if Planner and Planner.browserPanel then
         Planner.browserPanel:Show()
     end
@@ -891,6 +902,8 @@ local function BuildUI()
         btn:SetWidth(32)
         btn:SetHeight(32)
         btn.slotData = slot
+        btn:EnableMouse(true)
+        btn:SetFrameLevel(dollFrame:GetFrameLevel() + 2)
 
         btn.defaultIcon = slot.icon
         btn.enchantCategory = slot.enchant
@@ -1191,12 +1204,16 @@ local function BuildUI()
         row:SetWidth(276)
         row:SetHeight(32)
         row:SetPoint("TOPLEFT", browser, "TOPLEFT", 8, -64 - ((i - 1) * 35))
+        row:SetFrameLevel(browser:GetFrameLevel() + 3)
+        row:EnableMouse(true)
+        row:RegisterForClicks("LeftButtonUp")
         row:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
             edgeSize = 8, insets = { left = 1, right = 1, top = 1, bottom = 1 }
         })
         row:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+        row:SetBackdropBorderColor(0.3, 0.3, 0.35, 0.7)
 
         local rIcon = row:CreateTexture(nil, "ARTWORK")
         rIcon:SetWidth(24)
@@ -1208,13 +1225,13 @@ local function BuildUI()
         local rName = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         rName:SetPoint("TOPLEFT", rIcon, "TOPRIGHT", 6, 0)
         rName:SetJustifyH("LEFT")
-        rName:SetText("Item Name")
+        rName:SetText("")
         row.name = rName
 
         local rSub = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         rSub:SetPoint("BOTTOMLEFT", rIcon, "BOTTOMRIGHT", 6, 1)
         rSub:SetJustifyH("LEFT")
-        rSub:SetText("Source")
+        rSub:SetText("")
         row.sub = rSub
 
         row:SetScript("OnClick", function()
@@ -1225,14 +1242,19 @@ local function BuildUI()
         end)
 
         row:SetScript("OnEnter", function()
+            this:SetBackdropColor(0.2, 0.25, 0.35, 0.9)
             if this.item then
                 GameTooltip:SetOwner(this, "ANCHOR_RIGHT")
                 GameTooltip:SetHyperlink("item:" .. this.item.id .. ":0:0:0")
                 GameTooltip:Show()
             end
         end)
-        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        row:SetScript("OnLeave", function()
+            this:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+            GameTooltip:Hide()
+        end)
 
+        row:Hide()
         BrowserRows[i] = row
     end
 
