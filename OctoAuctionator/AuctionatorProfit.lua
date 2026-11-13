@@ -549,6 +549,94 @@ function Atr_ClearLiveScanDeals()
 	gAtr_LiveSeenKeys = {}
 end
 
+function Atr_GetItemSnipeCategory(name, quality)
+	if not name or name == "" then return "MATS" end
+
+	-- 1. Check GetItemInfo API if cached (100% accurate classification in Vanilla 1.12)
+	local gName, gLink, gQuality, gMinLevel, gType, gSubType, gStack, gEquipLoc = GetItemInfo(name)
+	if gType then
+		if gType == "Armor" or gType == "Weapon" then
+			return "GEAR"
+		elseif gType == "Recipe" then
+			return "RECIPES"
+		elseif gEquipLoc and gEquipLoc ~= "" and gEquipLoc ~= "INVTYPE_NON_EQUIP" then
+			return "GEAR"
+		end
+	end
+
+	local lName = string.lower(name)
+
+	-- 2. Check Recipes keywords
+	if string.find(lName, "recipe") or string.find(lName, "plans") or string.find(lName, "schematic") or
+	   string.find(lName, "pattern") or string.find(lName, "formula") or string.find(lName, "manual") or
+	   string.find(lName, "grimoire") or string.find(lName, "tome") or string.find(lName, "book") then
+		return "RECIPES"
+	end
+
+	-- 3. Comprehensive Armor & Weapon Keywords (handles all Vanilla BoE naming conventions)
+	local isGear = false
+	if (quality == nil or quality >= 1) then
+		if string.find(lName, "pauldrons") or string.find(lName, "spaulders") or string.find(lName, "mantle") or
+		   string.find(lName, "epaulets") or string.find(lName, "amice") or string.find(lName, "shoulder") or
+		   string.find(lName, "helm") or string.find(lName, "crown") or string.find(lName, "circlet") or
+		   string.find(lName, "coif") or string.find(lName, "cowl") or string.find(lName, "cap") or
+		   string.find(lName, "headband") or string.find(lName, "mask") or string.find(lName, "monocle") or
+		   string.find(lName, "visor") or string.find(lName, "goggles") or string.find(lName, "headdress") or
+		   string.find(lName, "breastplate") or string.find(lName, "chestpiece") or string.find(lName, "cuirass") or
+		   string.find(lName, "hauberk") or string.find(lName, "tunic") or string.find(lName, "vest") or
+		   string.find(lName, "robe") or string.find(lName, "vestment") or string.find(lName, "doublet") or
+		   string.find(lName, "raiment") or string.find(lName, "armor") or string.find(lName, "jerkin") or
+		   string.find(lName, "bracers") or string.find(lName, "wristguards") or string.find(lName, "cuffs") or
+		   string.find(lName, "armwraps") or string.find(lName, "armguards") or string.find(lName, "bindings") or
+		   string.find(lName, "bands") or string.find(lName, "wristbands") or
+		   string.find(lName, "gloves") or string.find(lName, "gauntlets") or string.find(lName, "handguards") or
+		   string.find(lName, "grips") or string.find(lName, "mitts") or string.find(lName, "handwraps") or
+		   string.find(lName, "belt") or string.find(lName, "girdle") or string.find(lName, "cinch") or
+		   string.find(lName, "sash") or string.find(lName, "cord") or string.find(lName, "clasp") or string.find(lName, "waistband") or
+		   string.find(lName, "leggings") or string.find(lName, "legguards") or string.find(lName, "pants") or
+		   string.find(lName, "trousers") or string.find(lName, "breeches") or string.find(lName, "kilt") or
+		   string.find(lName, "skirt") or string.find(lName, "greaves") or
+		   string.find(lName, "boots") or string.find(lName, "sabatons") or string.find(lName, "moccasins") or
+		   string.find(lName, "footwraps") or string.find(lName, "shoes") or string.find(lName, "striders") or
+		   string.find(lName, "slippers") or
+		   string.find(lName, "cloak") or string.find(lName, "cape") or string.find(lName, "drape") or
+		   string.find(lName, "shroud") or string.find(lName, "shawl") or
+		   string.find(lName, "ring") or string.find(lName, "band") or string.find(lName, "loop") or
+		   string.find(lName, "signet") or string.find(lName, "seal") or
+		   string.find(lName, "necklace") or string.find(lName, "choker") or string.find(lName, "collar") or
+		   string.find(lName, "amulet") or string.find(lName, "medallion") or string.find(lName, "pendant") or
+		   string.find(lName, "chain") or string.find(lName, "talisman") or
+		   string.find(lName, "shield") or string.find(lName, "buckler") or string.find(lName, "targe") or string.find(lName, "defender") or
+		   string.find(lName, "sword") or string.find(lName, "blade") or string.find(lName, "scimitar") or
+		   string.find(lName, "rapier") or string.find(lName, "saber") or string.find(lName, "claymore") or
+		   string.find(lName, "broadsword") or string.find(lName, "falchion") or string.find(lName, "cutlass") or string.find(lName, "edge") or
+		   string.find(lName, "axe") or string.find(lName, "cleaver") or string.find(lName, "chopper") or
+		   string.find(lName, "hatchet") or string.find(lName, "battleaxe") or string.find(lName, "waraxe") or
+		   string.find(lName, "mace") or string.find(lName, "club") or string.find(lName, "hammer") or
+		   string.find(lName, "cudgel") or string.find(lName, "maul") or string.find(lName, "flail") or
+		   string.find(lName, "scepter") or string.find(lName, "warhammer") or
+		   string.find(lName, "dagger") or string.find(lName, "dirk") or string.find(lName, "stiletto") or
+		   string.find(lName, "knife") or string.find(lName, "kris") or string.find(lName, "toothpick") or
+		   string.find(lName, "shank") or string.find(lName, "piercer") or
+		   string.find(lName, "bow") or string.find(lName, "longbow") or string.find(lName, "shortbow") or
+		   string.find(lName, "gun") or string.find(lName, "rifle") or string.find(lName, "musket") or
+		   string.find(lName, "blunderbuss") or string.find(lName, "shotgun") or string.find(lName, "crossbow") or string.find(lName, "arbalest") or
+		   string.find(lName, "staff") or string.find(lName, "pole") or string.find(lName, "stave") or
+		   string.find(lName, "rod") or string.find(lName, "spire") or
+		   string.find(lName, "polearm") or string.find(lName, "halberd") or string.find(lName, "spear") or
+		   string.find(lName, "pike") or string.find(lName, "lance") or string.find(lName, "trident") or
+		   string.find(lName, "wand") or string.find(lName, "baton") then
+			isGear = true
+		end
+	end
+
+	if isGear then
+		return "GEAR"
+	end
+
+	return "MATS"
+end
+
 function Atr_CheckLiveScanDeal(name, itemPrice, buyoutPrice, count, quality, level)
 	if not name or name == "" or not itemPrice or itemPrice <= 0 then return end
 	-- Ignore vendor-purchased reagents & gray vendor trash
@@ -561,12 +649,7 @@ function Atr_CheckLiveScanDeal(name, itemPrice, buyoutPrice, count, quality, lev
 	local seenCount = (hist and hist.seenCount) or 0
 
 	-- Category determination
-	local category = "MATS"
-	if string.find(name, "Recipe") or string.find(name, "Plans") or string.find(name, "Schematic") or string.find(name, "Pattern") or string.find(name, "Formula") or string.find(name, "Manual") or string.find(name, "Book") or string.find(name, "Tome") then
-		category = "RECIPES"
-	elseif (quality and quality >= 2) and (string.find(name, "Shield") or string.find(name, "Sword") or string.find(name, "Axe") or string.find(name, "Mace") or string.find(name, "Dagger") or string.find(name, "Bow") or string.find(name, "Gun") or string.find(name, "Crossbow") or string.find(name, "Staff") or string.find(name, "Wand") or string.find(name, "Bracers") or string.find(name, "Helm") or string.find(name, "Shoulders") or string.find(name, "Breastplate") or string.find(name, "Boots") or string.find(name, "Belt") or string.find(name, "Gauntlets") or string.find(name, "Leggings") or string.find(name, "Cloak") or string.find(name, "Ring") or string.find(name, "Necklace") or string.find(name, "Pendant") or string.find(name, "Tunic") or string.find(name, "Robe") or string.find(name, "Vest")) then
-		category = "GEAR"
-	end
+	local category = Atr_GetItemSnipeCategory(name, quality)
 
 	-- Instant BoE snipe fallback if no prior history
 	local isInstantSnipe = false
@@ -648,6 +731,7 @@ function Atr_GetFlipAnalysis(filterCategory)
 				local k = string.lower(ld.name)
 				if not seen[k] then
 					seen[k] = true
+					ld.category = Atr_GetItemSnipeCategory(ld.name, ld.quality)
 					counts.ALL = counts.ALL + 1
 					if counts[ld.category] then counts[ld.category] = counts[ld.category] + 1 end
 					table.insert(allDeals, ld)
@@ -678,10 +762,7 @@ function Atr_GetFlipAnalysis(filterCategory)
 
 			if discountPct >= minDiscount and netProfit >= minProfit then
 				seen[key] = true
-				local category = "MATS"
-				if string.find(itemName, "Recipe") or string.find(itemName, "Plans") or string.find(itemName, "Schematic") or string.find(itemName, "Pattern") then
-					category = "RECIPES"
-				end
+				local category = Atr_GetItemSnipeCategory(itemName)
 
 				local dealType, tag, tagColor, priority
 				if netProfit >= 20000 then
@@ -1014,14 +1095,22 @@ local selectedRecipeName = nil
 
 function Atr_ProfitScroll_OnMouseWheel(delta)
 	local bar = getglobal("Atr_ProfitScrollScrollBar")
-	if bar and bar:IsShown() then
-		local cur = bar:GetValue()
-		local step = 36
-		if delta > 0 then
-			bar:SetValue(math.max(cur - step, 0))
-		else
-			bar:SetValue(cur + step)
+	local sf = getglobal("Atr_ProfitScroll")
+	if bar and sf then
+		local cur = bar:GetValue() or 0
+		local _, maxRange = bar:GetMinMaxValues()
+		if not maxRange or maxRange <= 0 then
+			maxRange = sf:GetVerticalScrollRange() or 0
 		end
+		local step = 45
+		local newVal = cur
+		if delta > 0 then
+			newVal = math.max(cur - step, 0)
+		else
+			newVal = math.min(cur + step, maxRange)
+		end
+		bar:SetValue(newVal)
+		sf:SetVerticalScroll(newVal)
 	end
 end
 
@@ -1089,9 +1178,29 @@ local function NextLine(width, height)
 end
 
 local function Atr_UpdateScrollState(maxHeight)
+	local sf = getglobal("Atr_ProfitScroll")
 	local content = getglobal("Atr_ProfitContent")
-	if content then
-		content:SetHeight(math.max(maxHeight or 100, 330))
+	local bar = getglobal("Atr_ProfitScrollScrollBar")
+	if content and sf then
+		local h = math.max(maxHeight or 100, 330)
+		content:SetHeight(h)
+		sf:UpdateScrollChildRect()
+
+		local maxRange = h - sf:GetHeight()
+		if maxRange < 0 then maxRange = 0 end
+		if bar then
+			bar:SetMinMaxValues(0, maxRange)
+			local cur = bar:GetValue() or 0
+			if cur > maxRange then
+				bar:SetValue(maxRange)
+				sf:SetVerticalScroll(maxRange)
+			end
+			if maxRange > 0 then
+				bar:Show()
+			else
+				bar:Hide()
+			end
+		end
 	end
 end
 
@@ -1303,6 +1412,10 @@ function Atr_RefreshProfitUI()
 			btn.filterId = cf.id
 			btn:SetScript("OnClick", function()
 				currentFlipFilter = this.filterId
+				local bar = getglobal("Atr_ProfitScrollScrollBar")
+				if bar then bar:SetValue(0) end
+				local sf = getglobal("Atr_ProfitScroll")
+				if sf then sf:SetVerticalScroll(0) end
 				Atr_RefreshProfitUI()
 			end)
 			btn:Show()
@@ -1336,6 +1449,10 @@ function Atr_RefreshProfitUI()
 			pBtn.profitVal = pill.value
 			pBtn:SetScript("OnClick", function()
 				AUCTIONATOR_SNIPE_MIN_PROFIT = this.profitVal
+				local bar = getglobal("Atr_ProfitScrollScrollBar")
+				if bar then bar:SetValue(0) end
+				local sf = getglobal("Atr_ProfitScroll")
+				if sf then sf:SetVerticalScroll(0) end
 				Atr_RefreshProfitUI()
 			end)
 			pBtn:Show()
@@ -1437,6 +1554,10 @@ function Atr_RefreshProfitUI()
 			t:SetText("Only show profitable crafts (Margin > 0)")
 			chkProf:SetScript("OnClick", function()
 				AUCTIONATOR_CRAFT_ONLY_PROFITABLE = (this:GetChecked() == 1)
+				local bar = getglobal("Atr_ProfitScrollScrollBar")
+				if bar then bar:SetValue(0) end
+				local sf = getglobal("Atr_ProfitScroll")
+				if sf then sf:SetVerticalScroll(0) end
 				Atr_RefreshProfitUI()
 			end)
 		end
@@ -1479,6 +1600,10 @@ function Atr_RefreshProfitUI()
 				pb.profId = pName
 				pb:SetScript("OnClick", function()
 					currentCraftProfFilter = this.profId
+					local bar = getglobal("Atr_ProfitScrollScrollBar")
+					if bar then bar:SetValue(0) end
+					local sf = getglobal("Atr_ProfitScroll")
+					if sf then sf:SetVerticalScroll(0) end
 					Atr_RefreshProfitUI()
 				end)
 				pb:Show()
