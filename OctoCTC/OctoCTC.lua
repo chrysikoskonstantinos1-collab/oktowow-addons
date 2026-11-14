@@ -41,7 +41,7 @@ local function HasShieldEquipped()
         local _, _, _, _, _, itemType = GetItemInfo(id)
         if itemType == "Shields" or itemType == "Shield" then return true end
     end
-    return true -- If holding offhand and checking stats, consider shield present
+    return false
 end
 
 -- ----------------------------------------------------------------------------
@@ -91,12 +91,13 @@ local function CalculateCTC()
         targetCTC = 100.0 + ((targetLevel - playerLevel) * 0.8)
     end
 
-    -- Check if Shield Block buff is currently active on player
+    -- Check if Shield Block buff is currently active on player (Ability_Defend texture in 1.12)
     local shieldBlockActive = false
     for i = 1, 32 do
         local buffTex = UnitBuff("player", i)
         if not buffTex then break end
-        if string.find(string.lower(buffTex), "shieldblock") then
+        local lowTex = string.lower(buffTex)
+        if string.find(lowTex, "ability_defend", 1, true) or string.find(lowTex, "shieldblock", 1, true) then
             shieldBlockActive = true
             break
         end
@@ -260,6 +261,10 @@ end
 -- ----------------------------------------------------------------------------
 local function UpdateCTCDisplay()
     if not Frame.isBuilt then return end
+    if not IsWarrior() then
+        Frame:Hide()
+        return
+    end
 
     -- Check if we should show the display
     local showFrame = true

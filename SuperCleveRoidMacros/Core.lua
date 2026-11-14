@@ -6004,6 +6004,9 @@ local function InitWarriorCombatHUD()
     end
 
     local isUnlocked = false
+    local UpdateScaleDisplay = nil
+    local swingActive = false
+    local slamCasting = false
 
     -- Shift + Left Click Drag (or whenever Unlocked)
     hud:RegisterForDrag("LeftButton")
@@ -6084,7 +6087,50 @@ local function InitWarriorCombatHUD()
             end
         end
 
-        -- 3. Fallback to standard 1.12 UnitDebuff / UnitBuff
+        -- 3. In Vanilla 1.12, UnitBuff/UnitDebuff return texture path, not spell names.
+        -- Map common abilities to their known icon textures for 100% reliable detection.
+        local AURA_TEX_MAP = {
+            ["battle shout"] = "ability_warrior_battleshout",
+            ["thunder clap"] = "spell_nature_thunderclap",
+            ["demoralizing shout"] = "ability_warrior_warcry",
+            ["sunder armor"] = "ability_warrior_sunder",
+            ["hamstring"] = "ability_shockwave",
+            ["mortal strike"] = "ability_warrior_savageblow",
+            ["rend"] = "ability_gouge",
+            ["shield block"] = "ability_defend",
+            ["death wish"] = "spell_shadow_deathpact",
+            ["shield wall"] = "ability_warrior_shieldwall",
+            ["last stand"] = "spell_holy_ashestoashes",
+            ["retaliation"] = "ability_warrior_challange",
+            ["recklessness"] = "ability_criticalstrike",
+            ["berserker rage"] = "spell_nature_ancestralguardian",
+            ["bloodrage"] = "ability_racial_bloodrage",
+            ["enrage"] = "spell_shadow_unholyfrenzy",
+            ["flurry"] = "ability_ghoulfrenzy",
+            ["sweeping strikes"] = "ability_rogue_slicedice",
+            ["revenge"] = "ability_warrior_revenge",
+            ["overpower"] = "ability_meleedamage",
+        }
+        local texMatch = AURA_TEX_MAP[searchLower] or string.gsub(searchLower, "%s+", "")
+
+        -- For player buffs, read exact remaining duration and stacks from native 1.12 API
+        if unit == "player" and filter ~= "HARMFUL" then
+            for i = 1, 32 do
+                local buffId = GetPlayerBuff(i - 1, "HELPFUL")
+                if not buffId or buffId < 0 then break end
+                local tex = GetPlayerBuffTexture(buffId)
+                if tex then
+                    local lowTex = string.lower(tex)
+                    if string.find(lowTex, texMatch, 1, true) or string.find(lowTex, searchLower, 1, true) then
+                        local rem = GetPlayerBuffTimeLeft(buffId) or 0
+                        local apps = GetPlayerBuffApplications(buffId) or 1
+                        return searchName, apps, 0, rem, tex
+                    end
+                end
+            end
+        end
+
+        -- 4. Fallback to standard 1.12 UnitDebuff / UnitBuff
         local maxSlots = (filter == "HARMFUL") and 16 or 32
         for i = 1, maxSlots do
             local tex, apps
@@ -6094,7 +6140,8 @@ local function InitWarriorCombatHUD()
                 tex, apps = UnitBuff(unit, i)
             end
             if not tex then break end
-            if string.find(string.lower(tex), searchLower) then
+            local lowTex = string.lower(tex)
+            if string.find(lowTex, texMatch, 1, true) or string.find(lowTex, searchLower, 1, true) then
                 return searchName, apps or 1, 0, 0, tex
             end
         end
@@ -7256,19 +7303,25 @@ local function InitWarriorCombatHUD()
     -- ------------------------------------------------------------------------
     -- Tactical Mastery Talent Detection (Auto-detects Rank 0-5)
     -- ------------------------------------------------------------------------
+    local tmScanned = false
     local cachedTMRage = 0
     local function GetTacticalMasteryRage()
+        if tmScanned then return cachedTMRage end
         local numTabs = GetNumTalentTabs()
         if not numTabs or numTabs == 0 then return 0 end
         for t = 1, numTabs do
             local numTalents = GetNumTalents(t) or 0
             for i = 1, numTalents do
                 local name, iconTexture, tier, column, currentRank = GetTalentInfo(t, i)
-                if name and (string.find(name, "Tactical Mastery") or (iconTexture and string.find(iconTexture, "Spell_Nature_EnchantArmor")) or (t == 1 and tier == 2 and column == 2)) then
-                    return (currentRank or 0) * 5
+                if name and (string.find(name, "Tactical Mastery", 1, true) or (iconTexture and string.find(iconTexture, "Spell_Nature_EnchantArmor", 1, true)) or (t == 1 and tier == 2 and column == 2)) then
+                    cachedTMRage = (currentRank or 0) * 5
+                    tmScanned = true
+                    return cachedTMRage
                 end
             end
         end
+        tmScanned = true
+        cachedTMRage = 0
         return 0
     end
 
@@ -7358,13 +7411,13 @@ local function InitWarriorCombatHUD()
     -- ------------------------------------------------------------------------
     -- State & Swing Logic (Auto-adapts to 1H vs 2H weapon!)
     -- ------------------------------------------------------------------------
-    local swingActive = false
+    swingActive = false
     local swingStart = 0
     local swingDuration = 2.8
     local pingPlayed = false
     local is2H = false
     local audioPing = true
-    local slamCasting = false
+    slamCasting = false
     local slamCastStart = 0
     local slamCastDuration = 1.98 -- Base 2.5s - 0.5s (Improved Slam 2/2) = 1.98s
     local slamHideTime = nil
@@ -7448,7 +7501,6 @@ local function InitWarriorCombatHUD()
     end
 
     local function UpdateRageDisplay()
-        UpdateAuras()
         local curRage = UnitMana("player") or 0
         local maxRage = UnitManaMax("player") or 100
         if maxRage <= 0 then maxRage = 100 end
@@ -7464,10 +7516,7 @@ local function InitWarriorCombatHUD()
         rageBar:SetValue(curRage)
         rageText:SetText(tostring(curRage))
 
-        if not cachedTMRage or cachedTMRage == 0 then
-            cachedTMRage = GetTacticalMasteryRage()
-        end
-        local tmRage = cachedTMRage or 0
+        local tmRage = GetTacticalMasteryRage() or 0
 
         -- Update Tactical Mastery threshold line inside rage bar
         local barW = rageBar:GetWidth() or 190
@@ -7542,6 +7591,7 @@ local function InitWarriorCombatHUD()
     eventFrame:RegisterEvent("UNIT_AURA")
     eventFrame:RegisterEvent("CHAT_MSG_COMBAT_SELF_HITS")
     eventFrame:RegisterEvent("CHAT_MSG_COMBAT_SELF_MISSES")
+    eventFrame:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_HITS")
     eventFrame:RegisterEvent("CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES")
     eventFrame:RegisterEvent("CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES")
     eventFrame:RegisterEvent("CHAT_MSG_SPELL_SELF_DAMAGE")
@@ -7554,9 +7604,11 @@ local function InitWarriorCombatHUD()
                 UpdateAuras()
             end
         elseif event == "CHARACTER_POINTS_CHANGED" or event == "SPELLS_CHANGED" then
+            tmScanned = false
             cachedTMRage = GetTacticalMasteryRage()
             UpdateRageDisplay()
         elseif event == "PLAYER_EQUIPMENT_CHANGED" or event == "PLAYER_ENTERING_WORLD" then
+            tmScanned = false
             cachedTMRage = GetTacticalMasteryRage()
             UpdateWeaponMode()
             UpdateRageDisplay()
@@ -7565,10 +7617,10 @@ local function InitWarriorCombatHUD()
             if arg2 == 0 or arg2 == nil then -- Main hand swing
                 TriggerSwing(arg1)
             end
-        elseif event == "CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES" or event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES" then
+        elseif event == "CHAT_MSG_COMBAT_CREATURE_VS_SELF_MISSES" or event == "CHAT_MSG_COMBAT_HOSTILEPLAYER_MISSES" or event == "CHAT_MSG_COMBAT_CREATURE_VS_SELF_HITS" then
             if arg1 then
                 local lowerMsg = string.lower(arg1)
-                if string.find(lowerMsg, "block") or string.find(lowerMsg, "dodge") or string.find(lowerMsg, "parry") then
+                if string.find(lowerMsg, "block", 1, true) or string.find(lowerMsg, "dodge", 1, true) or string.find(lowerMsg, "parry", 1, true) then
                     revActive = true
                     revExpires = GetTime() + 5.0
                     UpdateAuras()
@@ -7710,9 +7762,15 @@ local function InitWarriorCombatHUD()
         end
     end)
 
-    -- Dedicated ticker for Rage, Auras, and Cooldowns (runs continuously regardless of hud combat visibility)
+    -- Dedicated ticker for Rage, Auras, and Cooldowns (throttled to ~15 Hz to eliminate frame drops)
     local hudTicker = CreateFrame("Frame")
+    local hudTickerAcc = 0
     hudTicker:SetScript("OnUpdate", function()
+        local dt = arg1 or 0.05
+        hudTickerAcc = hudTickerAcc + dt
+        if hudTickerAcc < 0.07 then return end
+        hudTickerAcc = 0
+
         UpdateRageDisplay()
         UpdateAuras()
         UpdateWarriorCDs()
@@ -7939,7 +7997,7 @@ local function InitWarriorCombatHUD()
     sizeValText:SetPoint("RIGHT", incSizeBtn, "LEFT", -4, 0)
     sizeValText:SetTextColor(1, 0.85, 0.2, 1)
 
-    local function UpdateScaleDisplay()
+    UpdateScaleDisplay = function()
         sizeValText:SetText(string.format("%d%%", math.floor(curScale * 100 + 0.5)))
     end
 

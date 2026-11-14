@@ -315,7 +315,8 @@ local function ScanItemStats(itemID)
         end
     end
 
-    if hasAnyStat then
+    -- Cache parsed stats if we found any stats, or if the item tooltip had valid lines (prevent infinite re-scan loop)
+    if hasAnyStat or (numLines and numLines > 1) then
         ItemStatsCache[itemID] = stats
     end
     return stats
@@ -337,13 +338,13 @@ local function IndexAtlasLootData()
 
     local seenItems = {}
 
-    local function ParseEntry(v, cleanSource, sourceMinLvl, sourceMaxLvl)
+    local function ParseEntry(v, cleanSource, sourceMinLvl, sourceMaxLvl, isCraftTable)
         if type(v) ~= "table" then return end
 
         -- If nested array: v[1] is a table, recursively parse (handles sets and crafting tables)
         if type(v[1]) == "table" then
             for _, subEntry in ipairs(v) do
-                ParseEntry(subEntry, cleanSource, sourceMinLvl, sourceMaxLvl)
+                ParseEntry(subEntry, cleanSource, sourceMinLvl, sourceMaxLvl, isCraftTable)
             end
             return
         end
@@ -366,23 +367,24 @@ local function IndexAtlasLootData()
         -- Filter out world object loot containers that contain "Chest" in their name (e.g. Krom Stoutarm's Chest)
         local isChestObj = string.find(cleanSource, "FamilyChest") or string.find(cleanSource, "KromStoutarmChest") or string.find(cleanSource, "BaelogsChest") or string.find(cleanSource, "Tribute")
 
-        -- Slot match check (AtlasLoot #s tags + crafting table names)
-        local sHead     = string.find(rawDesc, "#s1#") or string.find(cleanSource, "Helm") or string.find(cleanSource, "Head")
+        -- Slot match check: use cleanSource keyword fallbacks ONLY for crafting tables
+        local craftSrc = (isCraftTable or isCraftSpell) and cleanSource or ""
+        local sHead     = string.find(rawDesc, "#s1#") or string.find(craftSrc, "Helm") or string.find(craftSrc, "Head")
         local sNeck     = string.find(rawDesc, "#s2#")
-        local sShoulder = string.find(rawDesc, "#s3#") or string.find(cleanSource, "Shoulder")
-        local sBack     = string.find(rawDesc, "#s4#") or string.find(cleanSource, "Cloak")
-        local sChest    = string.find(rawDesc, "#s5#") or ((string.find(cleanSource, "Chest") or string.find(cleanSource, "Robe")) and not isChestObj)
-        local sShirt    = string.find(rawDesc, "#s6#") or string.find(cleanSource, "Shirt")
-        local sTabard   = string.find(rawDesc, "#s7#") or string.find(cleanSource, "Tabard")
-        local sWrist    = string.find(rawDesc, "#s8#") or string.find(cleanSource, "Bracer")
-        local sHands    = string.find(rawDesc, "#s9#") or string.find(cleanSource, "Glove")
-        local sWaist    = string.find(rawDesc, "#s10#") or string.find(cleanSource, "Belt")
-        local sLegs     = string.find(rawDesc, "#s11#") or string.find(cleanSource, "Pant") or string.find(cleanSource, "Leg")
-        local sFeet     = string.find(rawDesc, "#s12#") or string.find(cleanSource, "Boot")
-        local sFinger   = string.find(rawDesc, "#s13#") or string.find(cleanSource, "Ring")
-        local sTrinket  = string.find(rawDesc, "#s14#") or string.find(cleanSource, "Trinket")
-        local sMain     = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h2#") or string.find(rawDesc, "#h3#") or string.find(cleanSource, "Weapon")
-        local sOff      = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h4#") or string.find(rawDesc, "#w8#") or string.find(rawDesc, "#s15#") or string.find(cleanSource, "Shield")
+        local sShoulder = string.find(rawDesc, "#s3#") or string.find(craftSrc, "Shoulder")
+        local sBack     = string.find(rawDesc, "#s4#") or string.find(craftSrc, "Cloak")
+        local sChest    = string.find(rawDesc, "#s5#") or ((string.find(craftSrc, "Chest") or string.find(craftSrc, "Robe")) and not isChestObj)
+        local sShirt    = string.find(rawDesc, "#s6#") or string.find(craftSrc, "Shirt")
+        local sTabard   = string.find(rawDesc, "#s7#") or string.find(craftSrc, "Tabard")
+        local sWrist    = string.find(rawDesc, "#s8#") or string.find(craftSrc, "Bracer")
+        local sHands    = string.find(rawDesc, "#s9#") or string.find(craftSrc, "Glove")
+        local sWaist    = string.find(rawDesc, "#s10#") or string.find(craftSrc, "Belt")
+        local sLegs     = string.find(rawDesc, "#s11#") or string.find(craftSrc, "Pant") or string.find(craftSrc, "Leg")
+        local sFeet     = string.find(rawDesc, "#s12#") or string.find(craftSrc, "Boot")
+        local sFinger   = string.find(rawDesc, "#s13#") or string.find(craftSrc, "Ring")
+        local sTrinket  = string.find(rawDesc, "#s14#") or string.find(craftSrc, "Trinket")
+        local sMain     = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h2#") or string.find(rawDesc, "#h3#") or string.find(craftSrc, "Weapon")
+        local sOff      = string.find(rawDesc, "#h1#") or string.find(rawDesc, "#h4#") or string.find(rawDesc, "#w8#") or string.find(rawDesc, "#s15#") or string.find(craftSrc, "Shield")
         local sRanged   = string.find(rawDesc, "#s16#") or string.find(rawDesc, "#w2#") or string.find(rawDesc, "#w3#") or string.find(rawDesc, "#w5#") or string.find(rawDesc, "#w11#") or string.find(rawDesc, "#w12#")
 
         if not (sHead or sNeck or sShoulder or sBack or sChest or sShirt or sTabard or sWrist or sHands or sWaist or sLegs or sFeet or sFinger or sTrinket or sMain or sOff or sRanged) then
@@ -390,7 +392,7 @@ local function IndexAtlasLootData()
         end
 
         local rawName = (type(v[3]) == "string" and v[3]) or ""
-        local icon = (type(v[2]) == "string" and not string.find(v[2], "#") and v[2]) or (type(v[4]) == "string" and not string.find(v[4], "#") and v[4]) or "INV_Misc_QuestionMark"
+        local icon = (type(v[2]) == "string" and v[2] ~= "" and not string.find(v[2], "#") and v[2]) or (type(v[4]) == "string" and v[4] ~= "" and not string.find(v[4], "#") and v[4]) or "INV_Misc_QuestionMark"
 
         -- Extract Quality & Name
         local _, _, qStr = string.find(rawName, "=q(%d)=")
@@ -572,6 +574,7 @@ local function IndexAtlasLootData()
     }
     for _, tblName in ipairs(validTables) do
         local dataSource = AtlasLoot_Data[tblName]
+        local isCraftTable = (tblName == "AtlasLootCrafting") or (string.find(tblName, "Craft") ~= nil)
         if type(dataSource) == "table" then
             for dataID, data in pairs(dataSource) do
                 if type(data) == "table" then
@@ -620,7 +623,7 @@ local function IndexAtlasLootData()
 
                     if not skipTable then
                         for _, v in ipairs(data) do
-                            ParseEntry(v, cleanSource, sourceMinLvl, sourceMaxLvl)
+                            ParseEntry(v, cleanSource, sourceMinLvl, sourceMaxLvl, isCraftTable)
                         end
                     end
                 end
@@ -1037,6 +1040,7 @@ local function UpdateBrowserList()
         local matchText = (searchLower == "") or (string.find(string.lower(it.name or ""), searchLower, 1, true) ~= nil)
 
         local effLvl = it.effLevel or GetEffectiveLevel(it)
+        it.sortLvl = effLvl
         local matchLevel = MatchesLevelFilter(effLvl, it, FilterLevel)
 
         if matchSubtype and matchText and matchLevel then
@@ -1046,8 +1050,8 @@ local function UpdateBrowserList()
 
     -- Sort according to SortMode safely
     pcall(table.sort, CurrentBrowserItems, function(a, b)
-        local effA = (a and a.effLevel) or 0
-        local effB = (b and b.effLevel) or 0
+        local effA = (a and (a.sortLvl or a.effLevel)) or 0
+        local effB = (b and (b.sortLvl or b.effLevel)) or 0
         local qa = (a and a.quality) or 0
         local qb = (b and b.quality) or 0
         local na = (a and a.name) or ""
@@ -1217,6 +1221,7 @@ local function BuildUI()
     Planner:SetScript("OnDragStart", function() this:StartMoving() end)
     Planner:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
     Planner:Hide()
+    table.insert(UISpecialFrames, "OctoBiSPlannerFrame")
 
     -- Title Bar (Modern Sleek Smoked Header)
     local titleBg = Planner:CreateTexture(nil, "BACKGROUND")
@@ -1455,7 +1460,7 @@ local function BuildUI()
         { name = "50-59", width = 38 },
         { name = "60", width = 26 },
     }
-    curX = 8
+    local curX = 8
     for _, lf in ipairs(levelFilters) do
         local lBtn = CreateFrame("Button", nil, browser)
         lBtn:SetWidth(lf.width)

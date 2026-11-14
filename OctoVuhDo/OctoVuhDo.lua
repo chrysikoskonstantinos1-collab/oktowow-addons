@@ -1809,7 +1809,52 @@ OVD:SetScript("OnEvent", function()
         UpdateBlizzardPartyFrames()
         RefreshRoster()
     elseif not OctoVuhDoDB.testMode then
-        RefreshRoster()
+        local u = arg1
+        local found = false
+        if u then
+            for i = 1, 40 do
+                local btn = unitButtons[i]
+                if btn and btn:IsShown() and btn.unit and UnitIsUnit(btn.unit, u) then
+                    local curHp = UnitHealth(btn.unit)
+                    local maxHp = UnitHealthMax(btn.unit)
+                    local curPow = UnitMana(btn.unit)
+                    local maxPow = UnitManaMax(btn.unit)
+                    local pType = UnitPowerType(btn.unit)
+                    local _, cls = UnitClass(btn.unit)
+                    local inRange = CheckUnitRange(btn.unit)
+                    local debuffType, debuffIcon = GetUnitDebuffInfo(btn.unit)
+                    local raidIcon = GetRaidTargetIndex(btn.unit)
+                    local hasRenew, hasRejuv = false, false
+                    for b = 1, 16 do
+                        local t = UnitBuff(btn.unit, b)
+                        if not t then break end
+                        if string.find(t, "Spell_Holy_Renew") then hasRenew = true end
+                        if string.find(t, "Spell_Nature_Rejuvenation") then hasRejuv = true end
+                    end
+                    UpdateUnitVisual(btn, {
+                        name = UnitName(btn.unit),
+                        class = cls,
+                        curHp = curHp,
+                        maxHp = maxHp,
+                        curPower = curPow,
+                        maxPower = maxPow,
+                        powerType = pType,
+                        inRange = inRange,
+                        hasAggro = false,
+                        debuffType = debuffType,
+                        debuffIcon = debuffIcon,
+                        raidIcon = raidIcon,
+                        hotTL = hasRenew,
+                        hotTR = hasRejuv,
+                    })
+                    found = true
+                    break
+                end
+            end
+        end
+        if not found and not u then
+            RefreshRoster()
+        end
     end
 end)
 

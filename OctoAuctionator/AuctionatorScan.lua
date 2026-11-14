@@ -1754,6 +1754,9 @@ function Atr_RestoreScan()
 		return;
 	end
 	gAtr_ScanIsMinimized = false;
+	if (Atr_CancelAutoLogout) then
+		Atr_CancelAutoLogout();
+	end
 
 	if (PlaySound and wasMinimized) then PlaySound("igMiniMapZoomOut"); end
 
@@ -2041,7 +2044,7 @@ function Atr_FullScanFrameIdle()
 
 	if (gAtr_FullScanState == ATR_FS_STARTED) then
 
-		local isAHOpen = (AuctionFrame and AuctionFrame:IsShown()) or (aux_frame and aux_frame:IsShown()) or gAtr_ScanIsMinimized;
+		local isAHOpen = (AuctionFrame and AuctionFrame:IsShown()) or (aux_frame and aux_frame:IsShown());
 		if (not isAHOpen) then
 			Atr_FullScanPause();
 			return;
